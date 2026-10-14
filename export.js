@@ -39,6 +39,12 @@ export function notebookMarkdown(bookId) {
   if (sm.feynman) L.push(`- 파인만 설명: ${sm.feynman.replace(/\n+/g, ' ')}`);
   L.push('## 핵심 개념 태그');
   L.push((sm.concepts || []).map(c => `#${c}`).join(' ') || '-');
+  L.push('## 연결된 책');
+  const linked = sm.linked_books || [];
+  const sameTag = S.books.filter(x => x.id !== bookId && (db.summaryOf(x.id)?.concepts || []).some(c => (sm.concepts || []).includes(c)));
+  if (linked.length) linked.forEach(t => L.push(`- ${t}`));
+  if (sameTag.length) L.push(`- (같은 핵심 개념 태그) ${sameTag.map(x => `『${T(x)}』`).join(', ')}`);
+  if (!linked.length && !sameTag.length) L.push('-');
   L.push('## 콘텐츠 활용');
   const cu = sm.content_used || {};
   [['blog', '블로그 서평'], ['card', '카드뉴스'], ['threads', '스레드'], ['club', '독서모임 발제']].forEach(([k, v]) => L.push(`- [${cu[k] ? 'x' : ' '}] ${v}`));
@@ -48,6 +54,7 @@ export function notebookMarkdown(bookId) {
   return L.join('\n');
 }
 
+// 4-5 독서 후기 빠르게 쓰는 법: 노트(한 줄 요약·핵심 문장 3개·이유·액션)로 뼈대를 만들고 '내 이야기'를 직접 더한다
 export function reviewDraft(bookId) {
   const b = db.book(bookId); const sm = db.summaryOf(bookId) || {}; const pre = b.pre_questions || {};
   const qs = db.byBook('quotes', bookId);
@@ -55,77 +62,97 @@ export function reviewDraft(bookId) {
   const picked = kq.length ? kq : qs.slice(0, 3).map(q => ({ text: q.body, page: q.page, reason: q.memo }));
   const thoughts = qs.filter(q => q.memo).slice(0, 4);
   const L = [];
-  L.push(`# [서평] ${T(b)}${sm.one_line ? ` | ${sm.one_line}` : ''}`);
+  L.push('제목 후보 (직접 고르기)', `1. ${T(b)}${sm.one_line ? ` | ${sm.one_line}` : ' | (한 줄 요약)'}`, '2. (직접 작성)', '3. (직접 작성)', '');
+  L.push(`# [서평] ${T(b)}`);
   L.push(`**책 정보** ${b.title} / ${b.author || ''} / ${b.publisher || ''}${b.pub_date ? ` (${b.pub_date.slice(0, 4)})` : ''}${b.pages ? ` / ${b.pages}쪽` : ''}`);
   L.push(`**읽은 기간** ${b.start_date || ''} ~ ${b.finish_date || ''} · 총 독서 시간 ${fmtDur(bookSeconds(bookId))}${b.rating ? ` · 나의 별점 ${b.rating}/5` : ''}`);
-  L.push('', '## 이 책을 읽게 된 이유', b.reason || pre.expect || '(직접 작성)');
+  L.push('', '## 이 책을 읽게 된 계기 (내 이야기)', b.reason || pre.expect || '(직접 작성)');
   L.push('', '## 한 줄 요약', sm.one_line || '(직접 작성)');
   L.push('', '## 기억할 문장');
-  picked.forEach(k => { L.push(`> ${k.text}${k.page ? ` (p.${k.page})` : ''}`); if (k.reason) L.push(`내 생각: ${k.reason}`); L.push(''); });
-  L.push('## 나의 생각');
-  if (sm.thesis) L.push(sm.thesis);
+  picked.forEach(k => { L.push(`> ${k.text}${k.page ? ` (p.${k.page})` : ''}`); if (k.reason) L.push(`인상 깊은 이유: ${k.reason}`); L.push(''); });
+  L.push('## 읽으면서 떠오른 내 경험 (내 이야기)');
   thoughts.forEach(q => L.push(`- ${q.memo_type ? `[${q.memo_type}] ` : ''}${q.memo}`));
-  if (!sm.thesis && !thoughts.length) L.push('(직접 작성)');
-  L.push('', '## 내 삶에 적용할 한 가지', sm.action_item || '(직접 작성)');
-  L.push('', '## 이런 분께 권해요', '- (직접 작성)');
+  L.push('(직접 작성)');
+  if (sm.thesis) L.push('', '## 이 책의 핵심', sm.thesis);
+  L.push('', '## 이 책 이후 실제로 바뀐 것 (내 이야기)', sm.action_item ? `액션 아이템: ${sm.action_item}` : '', '(실제로 해본 결과를 직접 작성)');
   L.push('', `나의 한 줄 평: ${sm.one_line || '(직접 작성)'}`);
   if ((sm.concepts || []).length) L.push('', (sm.concepts || []).map(c => '#' + c.replace(/\s+/g, '')).join(' '));
   if (b.source === 'aladin') L.push('', '도서 정보: 알라딘');
-  return L.join('\n');
+  L.push('', '※ AI 초안은 뼈대일 뿐이에요. 계기·내 경험·바뀐 것을 넣어야 후기가 살아나요. (원고 4-5)');
+  return L.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
+// 5-2: 카드뉴스는 핵심 인사이트 5개 → 7장
 export function cardNewsCopy(bookId) {
   const b = db.book(bookId); const sm = db.summaryOf(bookId) || {};
   const qs = db.byBook('quotes', bookId);
   const kq = (sm.key_quotes || []).filter(k => k.text);
-  const picked = (kq.length ? kq : qs.slice(0, 3).map(q => ({ text: q.body, page: q.page, reason: q.memo }))).slice(0, 3);
+  const ins = [...kq.map(k => ({ text: k.text, page: k.page, mine: k.reason })), ...qs.filter(q => !kq.some(k => k.text === q.body)).map(q => ({ text: q.body, page: q.page, mine: q.memo }))].slice(0, 5);
+  while (ins.length < 5) ins.push({ text: '(인사이트 직접 작성)', page: null, mine: '' });
   const L = [];
-  L.push(`[카드 1 · 표지]`, `${T(b)}`, `${b.author || ''}`, `훅 문구(직접 다듬기): ${sm.one_line || '이 책이 나에게 남긴 한 가지'}`, '');
-  picked.forEach((k, i) => {
-    L.push(`[카드 ${i + 2} · 기억할 한 문장]`, `"${k.text}"`, k.page ? `- p.${k.page}` : '', k.reason ? `내 생각: ${k.reason}` : '', '');
+  L.push('[카드 1 · 표지]', T(b), b.author || '', `훅 문구(직접 다듬기): ${sm.one_line || '이 책이 나에게 남긴 한 가지'}`, '');
+  ins.forEach((k, i) => {
+    L.push(`[카드 ${i + 2} · 인사이트 ${i + 1}]`, k.text.startsWith('(') ? k.text : `"${k.text}"${k.page ? ` (p.${k.page})` : ''}`);
+    if (k.mine) L.push(`내 생각: ${k.mine}`);
+    L.push('');
   });
-  const n = picked.length + 2;
-  L.push(`[카드 ${n} · 나의 한 줄 평]`, sm.one_line || '(직접 작성)', '');
-  L.push(`[카드 ${n + 1} · 오늘의 실천]`, sm.action_item || '(직접 작성)', '');
-  L.push(`[카드 ${n + 2} · 마무리]`, '여러분에게 가장 남은 문장은 무엇인가요?', '댓글로 나눠주세요.', '');
-  L.push('---', '[캡션 초안]', `${T(b)} (${b.author || ''})`, '', sm.one_line ? `제 한 줄 평은 이렇습니다. "${sm.one_line}"` : '', '', sm.action_item ? `이 책을 읽고 해볼 한 가지: ${sm.action_item}` : '', '',
+  L.push('[카드 7 · 마무리]', `나의 한 줄 평: ${sm.one_line || '(직접 작성)'}`, sm.action_item ? `이 책으로 해볼 한 가지: ${sm.action_item}` : '', '여러분에게 가장 남은 문장은 무엇인가요?', '');
+  L.push('---', '[캡션 초안]', `${T(b)} (${b.author || ''})`, sm.one_line ? `제 한 줄 평은 이렇습니다. "${sm.one_line}"` : '',
     ['독서', '책추천', '독서기록', ...(sm.concepts || [])].map(c => '#' + c.replace(/\s+/g, '')).join(' '));
-  L.push('', '※ "기억할 한 문장"은 책의 실제 문장만 사용. 나의 해석은 "내 생각/나의 한 줄 평"으로 구분.');
-  return L.filter(x => x !== undefined).join('\n');
+  L.push('', '※ 따옴표 문장은 책의 실제 문장만 사용. 나의 해석은 "내 생각/나의 한 줄 평"으로 구분. (원고 5-2: 핵심 인사이트 5개 → 카드뉴스 7장)');
+  return L.join('\n');
 }
 
+// 5-2: 스레드 5개 — "이 책 왜 읽어야 하는가" → 핵심 인사이트 3개 → 행동 촉구
 export function threadsDraft(bookId) {
   const b = db.book(bookId); const sm = db.summaryOf(bookId) || {};
-  const q = (sm.key_quotes || []).find(k => k.text) || (db.byBook('quotes', bookId)[0] ? { text: db.byBook('quotes', bookId)[0].body } : null);
-  return [
-    `[1] (첫 문장 후킹, 직접 다듬기) ${sm.one_line || T(b) + '을 읽고 남은 한 가지'}`,
-    '',
-    `[2] ${T(b)} (${b.author || ''})에서 가장 남은 문장`,
-    q ? `"${q.text}"` : '(문장 선택)',
-    '',
-    `[3] 제 한 줄 평은 이렇습니다. ${sm.one_line || '(직접 작성)'}`,
-    sm.action_item ? `그래서 이번 달 해볼 것: ${sm.action_item}` : '',
-    '',
-    '여러분은 최근 읽은 책에서 어떤 문장이 남았나요?',
-  ].join('\n');
+  const qs = db.byBook('quotes', bookId);
+  const kq = (sm.key_quotes || []).filter(k => k.text);
+  const ins = (kq.length ? kq : qs.map(q => ({ text: q.body, page: q.page, reason: q.memo }))).slice(0, 3);
+  while (ins.length < 3) ins.push({ text: '', reason: '' });
+  const L = [`[1/5] 이 책 왜 읽어야 하는가 (첫 문장 후킹, 직접 다듬기)`, `${T(b)}${b.author ? ` (${b.author.split(',')[0]})` : ''}. ${b.reason ? b.reason : '(내가 이 책을 읽은 이유)'}`, ''];
+  ins.forEach((k, i) => {
+    L.push(`[${i + 2}/5] 핵심 인사이트 ${i + 1}`, k.text ? `"${k.text}"` : '(인상 깊은 문장 직접 선택)');
+    L.push(k.reason ? `내 생각: ${k.reason}` : '내 생각: (직접 작성)', '');
+  });
+  L.push('[5/5] 행동 촉구', sm.action_item ? `저는 이번 달 이렇게 해봅니다: ${sm.action_item}` : '(이 책을 읽고 해볼 한 가지)', '여러분은 최근 읽은 책에서 어떤 문장이 남았나요?');
+  return L.join('\n');
 }
 
+// 5-5·부록 E: 토론 질문 3유형 × 2 (① 주장 동의/반대 ② 내 삶에 적용 ③ 저자에 대한 의문) + 20분 발표 구조
 export function discussionQuestions(bookId) {
   const b = db.book(bookId); const sm = db.summaryOf(bookId) || {};
   const qs = db.byBook('quotes', bookId);
+  const cite = q => `"${q.body}"${q.page ? ` (p.${q.page})` : ''}`;
+  const kq = (sm.key_quotes || []).filter(k => k.text).map(k => ({ body: k.text, page: k.page, memo: k.reason }));
+  const pool = [...kq, ...qs];
   const out = [];
-  out.push({ type: '여는 질문', q: `『${T(b)}』을 한 단어(또는 한 문장)로 표현한다면? 그 이유는?` });
-  qs.filter(q => q.memo_type === '의문').slice(0, 3).forEach(q => out.push({ type: '생각을 묻는 질문', q: `"${q.body}"${q.page ? ` (p.${q.page})` : ''} 저자의 이 말에 동의하시나요? 동의하거나 망설여지는 이유는?`, note: q.memo }));
-  qs.filter(q => q.memo_type === '연결').slice(0, 2).forEach(q => out.push({ type: '경험을 묻는 질문', q: `"${q.body}"${q.page ? ` (p.${q.page})` : ''} 이 문장을 읽고 떠오른 내 경험이나 다른 책이 있나요?`, note: q.memo }));
-  qs.filter(q => q.memo_type === '공감').slice(0, 2).forEach(q => out.push({ type: '경험을 묻는 질문', q: `"${q.body}"${q.page ? ` (p.${q.page})` : ''} 이 문장에 공감했던 순간이 있다면 나눠주세요.`, note: q.memo }));
-  (sm.concepts || []).slice(0, 2).forEach(c => out.push({ type: '개념 질문', q: `이 책의 핵심 개념 '${c}'을(를) 자기 말로 설명한다면? 일상에서 본 사례는?` }));
-  out.push({ type: '적용 질문', q: '이 책을 읽고 앞으로 30일 동안 실천해 볼 한 가지는 무엇인가요?' + (sm.action_item ? ` (발제자의 액션: ${sm.action_item})` : '') });
-  out.push({ type: '닫는 질문', q: '오늘 모임에서 나온 이야기 중 가장 남는 것 한 가지와, 이번 주 실천할 1가지는?' });
-  return out;
+  const agree = [...pool.filter(q => q.memo_type === '의문'), ...pool].slice(0, 2);
+  agree.forEach(q => out.push({ type: '① 주장에 동의/반대', q: `${cite(q)} 저자의 이 주장에 동의하시나요, 반대하시나요? 그 이유는?`, note: q.memo }));
+  if (agree.length < 2) out.push({ type: '① 주장에 동의/반대', q: sm.thesis ? `저자의 핵심 주장 중 동의하는 것과 동의하지 않는 것은 무엇인가요?` : '(저자의 핵심 주장 하나를 넣어 직접 작성)' });
+  const apply = [...pool.filter(q => q.memo_type === '연결' || q.memo_type === '공감')].slice(0, 1);
+  apply.forEach(q => out.push({ type: '② 내 삶에 적용', q: `${cite(q)} 이 문장을 내 일이나 생활에 적용한다면 무엇이 달라질까요?`, note: q.memo }));
+  out.push({ type: '② 내 삶에 적용', q: '이 책에서 하나만 30일 동안 실험해 본다면 무엇을 해보고 싶나요?' + (sm.action_item ? ` (발제자의 액션: ${sm.action_item})` : '') });
+  if (!apply.length) out.push({ type: '② 내 삶에 적용', q: (sm.concepts || [])[0] ? `'${sm.concepts[0]}'이(가) 내 삶에서 작동했던 순간이 있었나요?` : '(직접 작성)' });
+  out.push({ type: '③ 저자에 대한 의문', q: `저자는 왜 이 책을 썼을까요? 저자가 놓치고 있거나 말하지 않은 것은 무엇일까요?` });
+  out.push({ type: '③ 저자에 대한 의문', q: `이 책의 주장이 틀리다면 어떤 상황일까요?` });
+  return out.slice(0, 6);
 }
 export const discussionMarkdown = (bookId) => {
-  const b = db.book(bookId);
-  return [`# 『${T(b)}』 독서모임 발제`, '', ...discussionQuestions(bookId).map((x, i) => `${i + 1}. [${x.type}] ${x.q}${x.note ? `\n   - 발제자 메모: ${x.note}` : ''}`)].join('\n');
+  const b = db.book(bookId); const sm = db.summaryOf(bookId) || {};
+  return [
+    `# 『${T(b)}』 독서모임 발제`, '',
+    '## 20분 발표 구조',
+    `- 도입 (3분): 이 책을 고른 이유. ${b.reason || '(직접 작성)'}`,
+    `- 독서 요약 (7분): ${sm.one_line || '(한 줄 요약)'}${sm.thesis ? ` / 핵심: ${sm.thesis.replace(/\n+/g, ' ')}` : ''}`,
+    `- 핵심 인사이트 (7분): ${(sm.key_quotes || []).filter(k => k.text).map(k => `"${k.text}"`).join(' · ') || '(핵심 문장 3개)'}`,
+    '- Q&A 유도 (3분): "저는 이 부분에서 동의하지 않는데, 여러분은 어떻게 생각하세요?"', '',
+    '## 토론 질문',
+    ...discussionQuestions(bookId).map((x, i) => `${i + 1}. [${x.type}] ${x.q}${x.note ? `\n   - 발제자 메모: ${x.note}` : ''}`), '',
+    '## 진행 팁 (원고 부록 E)',
+    '- 좋은 토론의 3조건: ① 답이 하나가 아닐 것 ② 참여자마다 다른 답을 가질 것 ③ 책을 읽지 않은 사람도 생각해볼 수 있을 것',
+    '- 토론이 정체될 때: "이 주장이 틀리다면 어떤 상황일까요?"',
+  ].join('\n');
 };
 
 export function allMarkdown() {

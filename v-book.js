@@ -193,6 +193,7 @@ function tabSummary(T, b) {
       <label>논지 압축: 핵심 3가지를 내 말로<textarea name="thesis" rows="3">${esc(sm.thesis || '')}</textarea></label>
       <label>파인만 설명: 중학생에게 설명하듯<textarea name="feynman" rows="3">${esc(sm.feynman || '')}</textarea></label>
       <label>핵심 개념 태그 (5개 내외, 쉼표 구분)<input name="concepts" value="${esc((sm.concepts || []).join(', '))}"></label>
+      <label>연결된 책 (이 책과 이어지는 다른 책, 쉼표 구분)<input name="linked_books" value="${esc((sm.linked_books || []).join(', '))}" placeholder="예: 총, 균, 쇠, 팩트풀니스"></label>
       <div class="field-label">콘텐츠 활용</div>
       <div class="row gap wrap">${[['blog', '블로그 서평'], ['card', '카드뉴스'], ['threads', '스레드'], ['club', '독서모임 발제']].map(([k, v]) => `<label class="check"><input type="checkbox" name="cu_${k}" ${cu[k] ? 'checked' : ''}> ${v}</label>`).join('')}</div>
       <div class="row end gap"><button class="btn primary">정리 저장</button></div>
@@ -228,6 +229,7 @@ function tabSummary(T, b) {
       written_at: sm.written_at || new Date().toISOString(),
     };
     row.concepts = String(fd.get('concepts')).split(',').map(s => s.trim()).filter(Boolean).slice(0, 10);
+    row.linked_books = String(fd.get('linked_books')).split(',').map(s => s.trim()).filter(Boolean);
     await db.save('summaries', row);
     await ensureReviews(b.id, b.finish_date || ymd());
     toast('정리를 저장했어요. 복습 일정이 잡혔어요');

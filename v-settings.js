@@ -2,7 +2,7 @@
 import * as db from './db.js';
 import { S } from './db.js';
 import { esc, toast, download, GENRES, openModal, ymd } from './ui.js';
-import { GENRE_PROMPTS, QUICK_CARDS } from './guide-data.js';
+import { GENRE_GUIDE, QUICK_CARDS } from './guide-data.js';
 import { allMarkdown, backupJson } from './export.js';
 import { refresh } from './app.js';
 
@@ -40,7 +40,7 @@ export async function renderSettings(el) {
 
   <div class="card">
     <h3>가이드 프롬프트 편집</h3>
-    <p class="muted small">원고 부록 A(장르별 프롬프트)와 부록 D(빠른 참조 카드) 문구로 바꿔 쓸 수 있어요. 비워두면 기본값을 써요.</p>
+    <p class="muted small">기본값은 『AI가 각인시켜주는 독서법』 부록 A(장르별 프롬프트)·부록 D(빠른 참조 카드) 원문이에요. 바꾸고 싶을 때만 고쳐 쓰고, 비워두면 원문을 써요.</p>
     <div class="row gap wrap"><button class="btn small" data-edit-genres>장르별 프롬프트 (5종)</button><button class="btn small" data-edit-cards>빠른 참조 카드 (12종)</button></div>
   </div>
 
@@ -81,25 +81,40 @@ export async function renderSettings(el) {
 
 function editGenres() {
   const cp = S.settings.custom_prompts || {};
-  const m = openModal(`<h3>장르별 프롬프트</h3><form class="form" id="gf">${GENRES.map(g => `<label>${g}<textarea name="${g}" rows="3" placeholder="${esc(GENRE_PROMPTS[g])}">${esc((cp.genres || {})[g] || '')}</textarea></label>`).join('')}<div class="row end"><button class="btn primary">저장</button></div></form>`, { wide: true });
+  const cg = cp.genreGuide || {};
+  const m = openModal(`<h3>장르별 프롬프트 (부록 A)</h3>
+    <p class="muted small">기본값은 원고 부록 A 원문이에요. 바꾸고 싶을 때만 입력하세요. 프롬프트는 한 줄에 하나씩 "상황 | 프롬프트" 형식으로 써요.</p>
+    <form class="form" id="gf">${GENRES.map(g => {
+      const base = GENRE_GUIDE[g];
+      return `<fieldset><legend>${g} <span class="muted small">${esc(base.from)}</span></legend>
+        <label>AI 지침<textarea name="${g}_lens" rows="2" placeholder="${esc(base.lens)}">${esc(cg[g]?.lens || '')}</textarea></label>
+        <label>프롬프트<textarea name="${g}_prompts" rows="4" placeholder="${esc(base.prompts.map(p => `${p.label} | ${p.text}`).join('\n'))}">${esc((cg[g]?.prompts || []).map(p => `${p.label} | ${p.text}`).join('\n'))}</textarea></label></fieldset>`;
+    }).join('')}<div class="row end"><button class="btn primary">저장</button></div></form>`, { wide: true });
   m.el.querySelector('#gf').onsubmit = async e => {
     e.preventDefault(); const fd = new FormData(e.target);
-    const genres = {}; GENRES.forEach(g => { const v = fd.get(g).trim(); if (v) genres[g] = v; });
-    await db.saveSettings({ custom_prompts: { ...cp, genres } }); toast('저장했어요'); m.close();
+    const genreGuide = {};
+    GENRES.forEach(g => {
+      const lens = fd.get(`${g}_lens`).trim();
+      const prompts = fd.get(`${g}_prompts`).split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [a, ...b] = l.split('|'); return b.length ? { label: a.trim(), text: b.join('|').trim() } : { label: '프롬프트', text: a.trim() }; });
+      if (lens || prompts.length) genreGuide[g] = { ...(lens ? { lens } : {}), ...(prompts.length ? { prompts } : {}) };
+    });
+    await db.saveSettings({ custom_prompts: { ...cp, genreGuide } }); toast('저장했어요'); m.close();
   };
 }
 function editCards() {
   const cp = S.settings.custom_prompts || {};
   const cc = cp.cards || {};
-  const m = openModal(`<h3>빠른 참조 카드 12종</h3><form class="form" id="cf">${QUICK_CARDS.map(c => `<fieldset><legend>${c.id.slice(1)}</legend>
-    <label>제목<input name="${c.id}_title" value="${esc(cc[c.id]?.title || '')}" placeholder="${esc(c.title)}"></label>
-    <label>사용자가 먼저 쓸 것<input name="${c.id}_need" value="${esc(cc[c.id]?.need || '')}" placeholder="${esc(c.need)}"></label>
-    <label>AI 지침<textarea name="${c.id}_ai" rows="2" placeholder="${esc(c.ai)}">${esc(cc[c.id]?.ai || '')}</textarea></label></fieldset>`).join('')}
+  const m = openModal(`<h3>상황별 빠른 참조 카드 (부록 D)</h3>
+    <p class="muted small">기본값은 원고 부록 D 원문이에요. [ ]로 표시된 부분은 쓸 때 사용자가 채워요.</p>
+    <form class="form" id="cf">${QUICK_CARDS.map(c => `<fieldset><legend>${c.id.slice(1)}. ${esc(c.title)}</legend>
+    <label>상황<input name="${c.id}_title" value="${esc(cc[c.id]?.title || '')}" placeholder="${esc(c.title)}"></label>
+    <label>프롬프트<textarea name="${c.id}_prompt" rows="2" placeholder="${esc(c.prompt)}">${esc(cc[c.id]?.prompt || '')}</textarea></label>
+    <label>AI 진행 지침<textarea name="${c.id}_ai" rows="2" placeholder="${esc(c.ai)}">${esc(cc[c.id]?.ai || '')}</textarea></label></fieldset>`).join('')}
     <div class="row end"><button class="btn primary">저장</button></div></form>`, { wide: true });
   m.el.querySelector('#cf').onsubmit = async e => {
     e.preventDefault(); const fd = new FormData(e.target);
     const cards = {};
-    QUICK_CARDS.forEach(c => { const o = {}; ['title', 'need', 'ai'].forEach(k => { const v = fd.get(`${c.id}_${k}`).trim(); if (v) o[k] = v; }); if (Object.keys(o).length) cards[c.id] = o; });
+    QUICK_CARDS.forEach(c => { const o = {}; ['title', 'prompt', 'ai'].forEach(k => { const v = fd.get(`${c.id}_${k}`).trim(); if (v) o[k] = v; }); if (Object.keys(o).length) cards[c.id] = o; });
     await db.saveSettings({ custom_prompts: { ...cp, cards } }); toast('저장했어요'); m.close();
   };
 }

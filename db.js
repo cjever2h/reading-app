@@ -20,7 +20,7 @@ const FIELDS = {
   sessions: ['id', 'book_id', 'started_at', 'ended_at', 'seconds', 'start_page', 'end_page', 'photo_path', 'memo'],
   quotes: ['id', 'book_id', 'session_id', 'body', 'page', 'memo', 'memo_type', 'tags'],
   notes: ['id', 'book_id', 'kind', 'title', 'body', 'note_date', 'tags'],
-  summaries: ['id', 'book_id', 'one_line', 'key_quotes', 'concepts', 'action_item', 'feynman', 'thesis', 'content_used', 'written_at'],
+  summaries: ['id', 'book_id', 'one_line', 'key_quotes', 'concepts', 'action_item', 'feynman', 'thesis', 'content_used', 'written_at', 'linked_books'],
   experiments: ['id', 'book_id', 'action', 'start_date', 'checks', 'result_memo', 'plan'],
   reviews: ['id', 'book_id', 'stage', 'due_date', 'done', 'response', 'done_at'],
   guides: ['id', 'book_id', 'mode', 'messages', 'step', 'summary', 'status'],

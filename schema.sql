@@ -93,6 +93,7 @@ create table if not exists public.summaries (
   thesis text,                              -- 논지 압축 (내가 쓴 핵심 3가지)
   feynman text,                             -- 파인만 설명
   content_used jsonb not null default '{}', -- {blog, card, threads, club}
+  linked_books text[] not null default '{}', -- 연결된 책 (부록 B)
   written_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

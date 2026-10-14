@@ -2,7 +2,7 @@
 import * as db from './db.js';
 import { S } from './db.js';
 import { ymd, addDays } from './ui.js';
-import { PRINCIPLES, genrePrompt } from './guide-data.js';
+import { PRINCIPLES, genreGuide } from './guide-data.js';
 
 export const sessionDate = s => ymd(new Date(s.started_at));
 export const pagesOf = s => (s.end_page && s.start_page != null) ? Math.max(0, s.end_page - s.start_page + 1) : 0;
@@ -52,11 +52,12 @@ export function dueReviews(today = ymd()) {
 }
 
 /* ---------- AI 맥락 ---------- */
-export function bookContext(bookId, { uptoPage = null, includeNotes = true } = {}) {
+export function bookContext(bookId, { uptoPage = null, includeNotes = true, toc = false } = {}) {
   const b = db.book(bookId);
   if (!b) return '';
   const lines = [`[책] ${b.title} / ${b.author || ''} / ${b.publisher || ''} / 장르: ${b.genre || '미정'} / 총 ${b.pages || '?'}쪽`];
   if (b.description) lines.push(`[알라딘 소개] ${b.description.slice(0, 800)}`);
+  if (toc && b.toc) lines.push(`[목차]\n${b.toc.slice(0, 2500)}`);
   if (b.reason) lines.push(`[읽는 이유] ${b.reason}`);
   if (b.pre_questions) { const q = b.pre_questions; lines.push(`[읽기 전 질문] 기대: ${q.expect || '-'} / 의심: ${q.doubt || '-'} / 연결: ${q.connect || '-'}`); }
   const page = uptoPage ?? lastPage(bookId);
@@ -79,7 +80,8 @@ export function systemPrompt(bookId, extra = '', opts = {}) {
   const b = db.book(bookId);
   const custom = S.settings.custom_prompts || {};
   const parts = [PRINCIPLES];
-  if (b?.genre) parts.push('[장르 지침] ' + genrePrompt(b.genre, custom));
+  const gg = b?.genre ? genreGuide(b.genre, custom) : null;
+  if (gg) parts.push(`[장르 지침 · ${gg.from}] ${gg.lens}\n원고 부록 A의 이 장르 프롬프트: ${gg.prompts.map(p => `${p.label} "${p.text}"`).join(' / ')}`);
   if (!S.settings.cross_book) parts.push('다른 책과의 교차 분석은 하지 않는다.');
   if (bookId) parts.push(bookContext(bookId, opts));
   if (extra) parts.push('[이번 단계에서 할 일] ' + extra);

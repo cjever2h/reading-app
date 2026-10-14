@@ -1,11 +1,39 @@
 // AI각인 독서가이드: 읽기 전 · 읽는 중 · 날마다 · 읽은 후 · 활용 + 빠른 참조 카드 12종
 import * as db from './db.js';
 import { S } from './db.js';
-import { esc, nl2br, toast, ymd, coverImg, fmtDate, fmtDur, confirmBox, parseTags } from './ui.js';
-import { MODES, STEPS, DURING_ACTIONS, quickCards } from './guide-data.js';
-import { systemPrompt, aiOn, lastPage, secondsOn, sessionDate, ensureReviews } from './calc.js';
+import { esc, nl2br, toast, ymd, coverImg, fmtDate, fmtDur, copyText } from './ui.js';
+import { MODES, STEPS, DURING_ACTIONS, quickCards, genreGuide, placeholders } from './guide-data.js';
+import { systemPrompt, aiOn, lastPage, sessionDate, ensureReviews } from './calc.js';
 import { go, query } from './app.js';
-import { quoteModal } from './forms.js';
+import { notebookMarkdown } from './export.js';
+
+/** 카드 해석: c1~c12 = 부록 D, g0~ = 부록 A(책 장르) */
+function resolveCard(id, bookId) {
+  const custom = S.settings.custom_prompts || {};
+  if (id && /^g\d+$/.test(id)) {
+    const b = db.book(bookId);
+    const gg = b?.genre ? genreGuide(b.genre, custom) : null;
+    const p = gg?.prompts[Number(id.slice(1))];
+    if (p) return { id, title: `${b.genre} · ${p.label}`, prompt: p.text, from: gg.from, ai: `원고 ${gg.from}의 '${p.label}' 프롬프트다. 사용자의 요청에 답하되, 사용자가 자기 생각을 더해 이어갈 수 있도록 마지막에 질문 하나를 한다.` };
+  }
+  const cards = quickCards(custom);
+  const c = cards.find(x => x.id === id) || cards[0];
+  return { ...c, from: '부록 D · 상황별 빠른 참조 카드' };
+}
+
+/** [메모] [노트] [목록]을 내 기록으로 채우기 */
+function fillText(ph, bookId) {
+  if (ph === '[노트]') return bookId ? '\n' + notebookMarkdown(bookId) + '\n' : '';
+  if (ph === '[메모]') {
+    const qs = db.byBook('quotes', bookId).filter(q => q.memo).map(q => `- (p.${q.page ?? '?'}) ${q.memo_type ? `[${q.memo_type}] ` : ''}${q.memo}`);
+    const ns = db.byBook('notes', bookId).filter(n => n.kind === 'chapter' || n.kind === 'daily').map(n => `- ${n.title || n.note_date}: ${String(n.body).replace(/\s+/g, ' ').slice(0, 300)}`);
+    return '\n' + [...qs, ...ns].join('\n') + '\n';
+  }
+  if (ph === '[목록]') {
+    return '\n' + S.books.filter(x => db.summaryOf(x.id)?.one_line).map(x => `- 『${x.title.split(/\s*:\s+/)[0]}』: ${db.summaryOf(x.id).one_line}`).join('\n') + '\n';
+  }
+  return null;
+}
 
 export function renderGuide(el, a, b) {
   if (a === 'new') return startNew(el, b);
@@ -17,31 +45,50 @@ function guideHome(el) {
   const books = S.books.filter(x => x.status !== 'want');
   const sel = query().get('book') || books.find(x => x.status === 'reading')?.id || books[0]?.id || '';
   const cards = quickCards(S.settings.custom_prompts || {});
+  const genreHtml = bookId => {
+    const b = db.book(bookId);
+    const gg = b?.genre ? genreGuide(b.genre, S.settings.custom_prompts || {}) : null;
+    if (!gg) return '<p class="muted small">책을 고르면 장르에 맞는 프롬프트가 나와요.</p>';
+    return `<p class="muted small">${esc(b.genre)} · 출처: ${esc(gg.from)}</p><div class="card-grid">${gg.prompts.map((p, i) => {
+      const locked = p.afterOnly && b.status !== 'done';
+      return `<button class="qcard" data-gp="${i}" ${locked ? 'disabled title="완독 후에 열려요 (결말 스포일러 방지)"' : ''}><b>${esc(p.label)}${locked ? ' · 완독 후' : ''}</b><span class="muted small">"${esc(p.text)}"</span></button>`;
+    }).join('')}</div>`;
+  };
   const recent = [...S.guides].sort((x, y) => (y.updated_at || '').localeCompare(x.updated_at || '')).slice(0, 12);
   el.innerHTML = `<h1>AI각인 독서가이드</h1>
     <p class="muted small">원칙: 내가 먼저 생각하고 쓴다. AI는 검증·질문·가공만 맡는다. 질문은 한 번에 하나씩. ${aiOn() ? `AI 연결됨 (${esc(S.apiStatus.ai)})` : 'AI 키 연결 전: 질문·힌트 중심의 가이드로 진행돼요.'}</p>
     <label class="mb">책 선택<select data-book>${books.map(x => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.title)}</option>`).join('')}<option value="" ${!sel ? 'selected' : ''}>(책 없이)</option></select></label>
     <div class="mode-grid">${Object.entries(MODES).map(([k, m]) => `<button class="card mode-card" data-mode="${k}"><b>${m.name}</b><span class="muted small">${m.when}</span><span class="small">${m.desc}</span><span class="muted small">저장: ${m.saves}</span></button>`).join('')}</div>
-    <h2 class="mt">상황별 빠른 참조 카드</h2>
-    <div class="card-grid">${cards.map(c => `<button class="qcard" data-card="${c.id}"><b>${esc(c.title)}</b><span class="muted small">내가 먼저: ${esc(c.need)}</span></button>`).join('')}</div>
+    <h2 class="mt">장르별 AI 독서 프롬프트 <span class="muted small">부록 A</span></h2>
+    <div data-genre>${genreHtml(sel)}</div>
+    <h2 class="mt">상황별 빠른 참조 카드 <span class="muted small">부록 D</span></h2>
+    <p class="muted small">[ ]로 표시된 부분에 내 상황을 넣으면 바로 사용할 수 있어요.</p>
+    <div class="card-grid">${cards.map(c => `<button class="qcard" data-card="${c.id}"><b>${esc(c.title)}</b><span class="muted small">"${esc(c.prompt)}"</span></button>`).join('')}</div>
     <h2 class="mt">최근 대화</h2>
     ${recent.length ? `<div class="list">${recent.map(g => `<a class="card row gap" href="#/guide/${g.id}"><span class="badge">${MODES[g.mode]?.name || '빠른 카드'}</span><span class="grow small">${esc(db.book(g.book_id)?.title || '')} ${esc(g.summary || '')}</span><span class="muted small">${fmtDate(g.updated_at || g.created_at, false)}</span></a>`).join('')}</div>` : '<p class="muted small">아직 대화가 없어요.</p>'}`;
   const bookSel = el.querySelector('[data-book]');
+  const bindGenre = () => el.querySelectorAll('[data-gp]').forEach(x => x.onclick = () => go(`#/guide/new/card?card=g${x.dataset.gp}&book=${bookSel.value}`));
+  bindGenre();
+  bookSel.onchange = () => { el.querySelector('[data-genre]').innerHTML = genreHtml(bookSel.value); bindGenre(); };
   el.querySelectorAll('[data-mode]').forEach(x => x.onclick = () => go(`#/guide/new/${x.dataset.mode}${bookSel.value ? '?book=' + bookSel.value : ''}`));
   el.querySelectorAll('[data-card]').forEach(x => x.onclick = () => go(`#/guide/new/card?card=${x.dataset.card}${bookSel.value ? '&book=' + bookSel.value : ''}`));
 }
 
 function startNew(el, mode) {
   const bookId = query().get('book') || null;
-  if (mode !== 'card' && mode !== 'daily' && !bookId) { toast('책을 먼저 고르세요'); return guideHome(el); }
+  const cardId = query().get('card');
+  const needBook = mode === 'card' ? !resolveCard(cardId, bookId).noBook : mode !== 'daily';
+  if (needBook && !bookId) { toast('책을 먼저 고르세요'); return guideHome(el); }
   const g = { id: crypto.randomUUID(), book_id: bookId, mode, messages: [], step: 0, status: 'open', _new: true };
   if (mode === 'card') g.card = query().get('card');
   // 첫 질문
   if (STEPS[mode]) g.messages.push({ role: 'guide', text: STEPS[mode][0].q, step: 0, prefill: prefillFor(mode, 0, bookId) });
-  else if (mode === 'during') g.messages.push({ role: 'guide', text: `동반 독서 파트너예요. 지금 몇 쪽까지 읽었는지 위에 적어주세요. 그 이후 내용은 먼저 말하지 않아요.\n아래 버튼(이해·연결·적용·속도 조절)을 누르거나, 궁금한 것을 먼저 적어보세요.`, step: 0 });
+  else if (mode === 'during') g.messages.push({ role: 'guide', text: `동반 독서 파트너예요. ① 질문하면 친절하게 답하기 ② 내 이해가 맞는지 확인해주기 ③ 더 깊이 생각할 질문 던지기. 단, 아직 읽지 않은 부분은 먼저 말하지 않아요.\n위에 지금 읽은 쪽을 적고, 아래 '모르면 즉시 묻기' 버튼을 누르거나 궁금한 것을 적어보세요.`, step: 0 });
   else if (mode === 'card') {
-    const c = quickCards(S.settings.custom_prompts || {}).find(x => x.id === g.card) || quickCards()[0];
-    g.messages.push({ role: 'guide', text: `[${c.title}]\n먼저 이것을 적어주세요: ${c.need}`, step: 0, card: c.id });
+    const c = resolveCard(cardId, bookId);
+    g.card = c.id;
+    const phs = placeholders(c.prompt);
+    g.messages.push({ role: 'guide', text: `[${c.from} · ${c.title}]\n"${c.prompt}"${phs.length ? `\n${phs.join(', ')} 부분을 내 내용으로 채워 보내세요.` : ''}`, step: 0, card: c.id, prefill: c.prompt });
   }
   history.replaceState(null, '', `#/guide/${g.id}`);
   S._draftGuide = g;
@@ -70,8 +117,9 @@ function chat(el, g) {
   const b = db.book(g.book_id);
   const steps = STEPS[g.mode];
   const done = g.status === 'done';
-  const cards = quickCards(S.settings.custom_prompts || {});
-  const card = g.mode === 'card' ? (cards.find(c => c.id === g.card) || cards[0]) : null;
+  const card = g.mode === 'card' ? resolveCard(g.card, g.book_id) : null;
+  const firstUserDone = g.messages.some(m => m.role === 'user');
+  const prefillCard = card && !firstUserDone;
   const title = card ? card.title : MODES[g.mode]?.name;
   const cur = steps ? steps[g.step] : null;
   const lastMsg = g.messages[g.messages.length - 1];
@@ -90,10 +138,12 @@ function chat(el, g) {
     ${done ? doneBox(g) : `
     ${g.mode === 'during' ? `<div class="row gap wrap mb">${DURING_ACTIONS.map(a => `<button class="btn small" data-da="${a.key}">${esc(a.label)}</button>`).join('')}</div>` : ''}
     <form class="composer" data-form>
-      <textarea rows="3" data-input placeholder="${cur ? '먼저 내 생각을 적어요' : '내 생각이나 질문을 먼저 적어요'}">${esc(!answeredThisStep && lastMsg?.role === 'guide' ? (lastMsg.prefill || '') : '')}</textarea>
+      <textarea rows="${prefillCard ? 5 : 3}" data-input placeholder="${cur ? '먼저 내 생각을 적어요' : '내 생각이나 질문을 먼저 적어요'}">${esc(prefillCard ? card.prompt : (!answeredThisStep && lastMsg?.role === 'guide' ? (lastMsg.prefill || '') : ''))}</textarea>
       ${cur?.limit ? `<div class="muted small right" data-count></div>` : ''}
       <div class="row gap wrap">
         <button type="button" class="btn small ghost" data-hint>막혔어요 (힌트)</button>
+        ${prefillCard && (card.fill || []).length && (g.book_id || card.fill.includes('[목록]')) ? `<button type="button" class="btn small" data-fill>${card.fill.join('·')}을 내 기록으로 채우기</button>` : ''}
+        ${card || g.mode === 'during' ? `<button type="button" class="btn small ghost" data-copy>프롬프트 복사</button>` : ''}
         <span class="grow"></span>
         ${steps && answeredThisStep ? `<button type="button" class="btn" data-next>${g.step + 1 >= steps.length ? '마치고 저장' : '다음 단계'}</button>` : ''}
         ${!steps ? `<button type="button" class="btn small" data-save-note>대화를 노트로 저장</button>` : ''}
@@ -113,18 +163,24 @@ function chat(el, g) {
   const counter = el.querySelector('[data-count]');
   if (counter) { const upd = () => { counter.textContent = `${input.value.length}/${cur.limit}자`; counter.classList.toggle('error', input.value.length > cur.limit); }; input.oninput = upd; upd(); }
 
-  el.querySelectorAll('[data-da]').forEach(x => x.onclick = () => { const a = DURING_ACTIONS.find(d => d.key === x.dataset.da); g._action = a.key; input.value = a.prompt; input.focus(); });
+  el.querySelectorAll('[data-da]').forEach(x => x.onclick = () => { const a = DURING_ACTIONS.find(d => d.key === x.dataset.da); g._action = a.key; g._tpl = a.prompt; input.value = a.prompt; input.focus(); const m = a.prompt.indexOf('['); if (m >= 0) input.setSelectionRange(m, a.prompt.indexOf(']', m) + 1); });
+  el.querySelector('[data-fill]')?.addEventListener('click', () => {
+    let t = input.value;
+    for (const ph of card.fill) { const v = fillText(ph, g.book_id); if (v != null) t = t.split(ph).join(v.trim() ? v : ph); }
+    input.value = t; input.focus();
+  });
+  el.querySelector('[data-copy]')?.addEventListener('click', () => copyText(input.value || card?.prompt || ''));
 
   el.querySelector('[data-hint]').onclick = async () => {
     if (aiOn() && (cur || card || g.mode === 'during')) {
       const btn = el.querySelector('[data-hint]'); btn.disabled = true; btn.textContent = '힌트 생각 중…';
       try {
-        const instr = `사용자가 이 질문에서 막혔다. 답을 대신 써주지 말고, 생각을 시작할 수 있는 힌트나 짧은 예시 하나만 준다. 질문: ${cur ? cur.q : (card ? card.need : '읽는 중 질문')}`;
+        const instr = `사용자가 이 질문에서 막혔다. 답을 대신 써주지 말고, 생각을 시작할 수 있는 힌트나 짧은 예시 하나만 준다. 질문: ${cur ? cur.q : (card ? `${card.prompt}의 ${placeholders(card.prompt).join(', ')} 부분을 무엇으로 채울지` : '읽는 중 질문')}`;
         const text = await callAi(g, instr, true);
         g.messages.push({ role: 'ai', text, step: g.step, hint: true });
-      } catch (e) { g.messages.push({ role: 'guide', text: `힌트: ${cur?.hint || card?.ai || '지금 읽은 부분에서 가장 마음에 걸리는 문장 하나를 그대로 옮겨 적어보세요.'}`, step: g.step }); }
+      } catch (e) { g.messages.push({ role: 'guide', text: `힌트: ${hintText(cur, card)}`, step: g.step }); }
     } else {
-      g.messages.push({ role: 'guide', text: `힌트: ${cur?.hint || (card ? card.ai : '지금 읽은 부분에서 가장 마음에 걸리는 문장 하나를 그대로 옮겨 적어보세요.')}`, step: g.step });
+      g.messages.push({ role: 'guide', text: `힌트: ${hintText(cur, card)}`, step: g.step });
     }
     persist(g); chat(el, g);
   };
@@ -137,6 +193,10 @@ function chat(el, g) {
     const text = input.value.trim();
     if (text.length < 2) { toast('먼저 내 생각을 한 줄이라도 적어요'); return; }
     if (cur?.limit && text.length > cur.limit) { toast(`${cur.limit}자 이내로 줄여주세요`); return; }
+    const tpl = prefillCard ? card.prompt : (g.mode === 'during' && g._tpl ? g._tpl : '');
+    const left = placeholders(tpl).filter(ph => text.includes(ph));
+    if (left.length) { toast(`${left.join(', ')} 부분을 내 내용으로 채워주세요`); return; }
+    g._tpl = null;
     const primary = steps ? !g.messages.some(m => m.role === 'user' && m.step === g.step) : false;
     g.messages.push({ role: 'user', text, step: g.step, primary });
     persist(g);
@@ -159,13 +219,19 @@ function chat(el, g) {
       if (steps && primary) return nextStep(el, g);
       if (!steps) {
         const a = g.mode === 'during' ? DURING_ACTIONS.find(d => d.key === g._action) : null;
-        const tip = a ? a.ai.replace(/^\[.*?\]\s*/, '') : card ? card.ai : '좋아요. 이 생각을 문장 메모나 노트로 남겨두면 완독 후 정리에 바로 쓸 수 있어요.';
-        g.messages.push({ role: 'guide', text: `가이드: ${tip}\n(AI 키를 연결하면 이 단계에서 AI가 질문으로 함께 생각해요)`, step: g.step });
+        const tip = a ? a.ai.replace(/^\[.*?\]\s*/, '') : '좋아요. 이 생각을 문장 메모나 노트로 남겨두면 완독 후 정리에 바로 쓸 수 있어요.';
+        g.messages.push({ role: 'guide', text: `${card ? '앱의 AI 키가 아직 연결되지 않았어요. 원고 방식대로 위 문장을 프롬프트 복사로 Claude나 ChatGPT에 붙여넣어 쓸 수 있어요.' : `가이드: ${tip}`}\n(AI 키를 연결하면 이 자리에서 AI가 바로 답해요)`, step: g.step });
         g._action = null;
       }
       persist(g); chat(el, g);
     }
   };
+}
+
+function hintText(cur, card) {
+  if (cur?.hint) return cur.hint;
+  if (card) { const phs = placeholders(card.prompt); return phs.length ? `${phs.join(', ')} 자리에 지금 내 상황을 구체적으로 적어보세요. 예: [개념] → "스몰 윈", [상황] → "40대 직장인, 출퇴근 1시간"` : '그대로 보내면 돼요.'; }
+  return '지금 읽은 부분에서 가장 마음에 걸리는 문장 하나를 그대로 옮겨 적어보세요.';
 }
 
 function msgHtml(m) {
@@ -176,7 +242,8 @@ function msgHtml(m) {
 
 async function callAi(g, instr, isHint = false) {
   const page = g.page ?? (g.book_id ? lastPage(g.book_id) : null);
-  const system = systemPrompt(g.book_id, instr, { uptoPage: page || null });
+  const card = g.mode === 'card' ? resolveCard(g.card, g.book_id) : null;
+  const system = systemPrompt(g.book_id, instr, { uptoPage: page || null, toc: !!card?.toc });
   const steps = STEPS[g.mode];
   const msgs = [];
   for (const m of g.messages) {
@@ -259,12 +326,12 @@ async function finalize(g) {
   if (g.mode === 'after' && b) {
     const prev = db.summaryOf(b.id) || {};
     await db.save('summaries', {
-      ...prev, book_id: b.id, one_line: a.one_line, key_quotes: [parseKq(a.kq1), parseKq(a.kq2), parseKq(a.kq3)], action_item: a.action_item,
+      ...prev, book_id: b.id, one_line: a.one_line_final || a.one_line, key_quotes: [parseKq(a.kq1), parseKq(a.kq2), parseKq(a.kq3)], action_item: a.action_item,
       thesis: a.thesis, feynman: a.feynman, concepts: a.concepts.split(/[,，#\n]+/).map(s => s.trim()).filter(Boolean).slice(0, 10),
       written_at: prev.written_at || new Date().toISOString(), content_used: prev.content_used || {},
     });
     await ensureReviews(b.id, b.finish_date || today);
-    g.summary = a.one_line.slice(0, 100);
+    g.summary = (a.one_line_final || a.one_line).slice(0, 100);
   }
   if (g.mode === 'apply' && b) {
     await db.save('experiments', { book_id: b.id, action: a.translate || a.extract, start_date: today, checks: {}, plan: { principle: a.extract, criteria: a.experiment, content: a.content } });
@@ -289,7 +356,7 @@ function bindDone(el, g) {
 
 async function saveChatAsNote(g) {
   const body = g.messages.map(m => `**${m.role === 'user' ? '나' : m.role === 'ai' ? 'AI' : '가이드'}**: ${m.text}`).join('\n\n');
-  const title = g.mode === 'during' ? '읽는 중 대화' : (quickCards(S.settings.custom_prompts || {}).find(c => c.id === g.card)?.title || '가이드 대화');
+  const title = g.mode === 'during' ? '읽는 중 대화' : (g.mode === 'card' ? resolveCard(g.card, g.book_id).title : '가이드 대화');
   await db.save('notes', { book_id: g.book_id, kind: g.mode === 'during' ? 'daily' : 'free', title, body, note_date: ymd(), tags: [] });
   const mine = g.messages.filter(m => m.role === 'user').map(m => m.text).join(' ').slice(0, 100);
   g.summary = mine; persist(g);
