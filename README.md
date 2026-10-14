@@ -14,7 +14,7 @@
 - 빌드 없는 정적 사이트(Vercel). 데이터는 Supabase(Postgres + RLS + Storage), 로그인 계정별로 분리.
 - `api` Edge Function(`edge-function-api.ts`): 알라딘 OpenAPI 프록시, AI 대화, 표지 이미지 프록시, 노션 전송, OCR.
 - 비밀값(Supabase → Edge Functions → Secrets)
-  - `ALADIN_TTB_KEY`: 알라딘 TTB 키. 없으면 Google Books로 임시 검색.
+  - `ALADIN_TTB_KEY`: 알라딘 TTB 키. 없으면 알라딘 공개 검색 페이지에서 기본 정보만 읽는 임시 모드.
   - `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` 또는 `ANTHROPIC_API_KEY`: AI 가이드·OCR. 없으면 질문·힌트 중심 가이드와 브라우저 OCR로 동작.
   - (선택) `NOTION_TOKEN`: 설정 화면에 토큰을 넣지 않을 때 쓰는 기본 노션 토큰.
 - `schema.sql`: 테이블(books, reading_sessions, quotes, notes, summaries, action_experiments, review_tasks, guide_sessions, settings), 태그 뷰(tag_index), RLS, 사진 버킷.

@@ -120,7 +120,7 @@ export function noteModal({ bookId = null, kind = 'free', note = null, onSaved }
 
 /* ---------- 알라딘 검색으로 책 추가 ---------- */
 export function searchModal({ onAdded } = {}) {
-  const src = S.apiStatus?.search === 'aladin' ? '알라딘' : (S.apiStatus ? 'Google Books (알라딘 키 등록 전 임시)' : '알라딘');
+  const src = S.apiStatus?.search === 'aladin' ? '알라딘 OpenAPI' : '알라딘 (TTB 키 등록 전 임시 검색)';
   const m = openModal(`
     <h3>책 추가</h3>
     <form class="row gap wrap" id="sf">
@@ -141,7 +141,7 @@ export function searchModal({ onAdded } = {}) {
       items = d.items || [];
       if (!items.length) { res.innerHTML = '<p class="muted">검색 결과가 없어요. 다른 검색어나 직접 입력을 써보세요.</p>'; return; }
       res.innerHTML = items.map((it, i) => {
-        const owned = S.books.some(b => b.isbn13 && b.isbn13 === it.isbn13);
+        const owned = S.books.some(b => (b.isbn13 && b.isbn13 === it.isbn13) || (it.aladin_link && b.aladin_link === it.aladin_link));
         return `<div class="result" data-i="${i}">${coverImg(it, 'cover sm')}<div class="grow"><b>${esc(it.title)}</b><div class="muted small">${esc(it.author)} · ${esc(it.publisher)} · ${esc(it.pub_date)}</div><div class="muted small">${esc(it.aladin_category)}</div></div>${owned ? '<span class="chip">서재에 있음</span>' : '<button class="btn small" data-pick>선택</button>'}</div>`;
       }).join('');
     } catch (err) { res.innerHTML = `<p class="error">검색 실패: ${esc(err.message)}</p>`; }
@@ -152,7 +152,7 @@ export function searchModal({ onAdded } = {}) {
     const it = items[+btn.closest('.result').dataset.i];
     btn.disabled = true; btn.textContent = '불러오는 중…';
     let full = it;
-    try { if (it.isbn13) { const d = await db.api('lookup', { isbn: it.isbn13 }); if (d.item) full = { ...it, ...Object.fromEntries(Object.entries(d.item).filter(([, v]) => v)) }; } } catch { /* 검색 결과만으로 진행 */ }
+    try { if (it.isbn13 || it.item_id) { const d = await db.api('lookup', { isbn: it.isbn13, item_id: it.item_id }); if (d.item) full = { ...it, ...Object.fromEntries(Object.entries(d.item).filter(([, v]) => v)) }; } } catch { /* 검색 결과만으로 진행 */ }
     m.close();
     bookEditModal({ book: { ...full, status: 'reading', genre: mapGenre(full.aladin_category), start_date: ymd() }, isNew: true, onSaved: onAdded });
   };

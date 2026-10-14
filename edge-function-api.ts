@@ -27,7 +27,7 @@ async function authUser(req: Request) {
 }
 
 /* ---------- 도서 검색 ---------- */
-type BookOut = { isbn13: string; title: string; author: string; publisher: string; pub_date: string; cover_url: string; pages: number | null; aladin_category: string; aladin_link: string; description: string; toc?: string; source: string };
+type BookOut = { isbn13: string; title: string; author: string; publisher: string; pub_date: string; cover_url: string; pages: number | null; aladin_category: string; aladin_link: string; description: string; toc?: string; source: string; item_id?: string; isbn10?: string };
 
 function fromAladin(it: any): BookOut {
   return {
@@ -57,7 +57,49 @@ function fromGoogle(v: any): BookOut {
   };
 }
 
+/* ---------- TTB 키 등록 전 임시: 알라딘 공개 검색 페이지에서 기본 정보만 읽기 ---------- */
+const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36', 'Accept-Language': 'ko-KR,ko;q=0.9' };
+const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
+const strip = (s: string) => decode(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+async function webSearch(q: string): Promise<BookOut[]> {
+  const r = await fetch(`https://www.aladin.co.kr/search/wsearchresult.aspx?SearchTarget=Book&SearchWord=${encodeURIComponent(q)}`, { headers: UA });
+  const html = await r.text();
+  const chunks = html.split('class="ss_book_box"').slice(1, 21);
+  const out: BookOut[] = [];
+  for (const c of chunks) {
+    const itemId = (c.match(/itemId="(\d+)"/) || [])[1];
+    const title = (c.match(/class="bo3">([\s\S]*?)<\/a>/) || [])[1];
+    if (!itemId || !title) continue;
+    const sub = (c.match(/class="bo3">[\s\S]*?<\/a><span class="ss_f_g2">\s*-\s*([^<]+)</) || [])[1];
+    const cover = (c.match(/src="(https:\/\/image\.aladin\.co\.kr\/product\/[^"]+?)" class="front_cover"/) || c.match(/src="(https:\/\/image\.aladin\.co\.kr\/product\/[^"]+?cover[^"]*?)"/) || [])[1] || '';
+    const isbn = (c.match(/chkCart\.([0-9X]+)/i) || [])[1] || '';
+    const infoLi = (c.match(/<li>(?:(?!<li>)[\s\S])*?AuthorSearch[\s\S]*?<\/li>/) || c.match(/<li>(?:(?!<li>)[\s\S])*?PublisherSearch[\s\S]*?<\/li>/) || [])[0] || '';
+    const parts = strip(infoLi).split('|').map(s => s.trim());
+    const cat = (c.match(/class="tit_category">\[([^\]]+)\]/) || [])[1] || '';
+    out.push({
+      isbn13: isbn.length === 13 ? isbn : '', title: strip(title) + (sub ? `: ${strip(sub)}` : ''), author: parts[0] || '', publisher: parts[1] || '', pub_date: parts[2] || '',
+      cover_url: cover.replace('/cover200/', '/cover500/'), pages: null, aladin_category: cat, aladin_link: `https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=${itemId}`,
+      description: '', source: 'aladin', item_id: itemId, isbn10: isbn.length === 10 ? isbn : '',
+    });
+  }
+  return out;
+}
+async function webLookup(itemId: string): Promise<Partial<BookOut> | null> {
+  const r = await fetch(`https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=${itemId}`, { headers: UA });
+  const h = await r.text();
+  const meta = (p: string) => decode((h.match(new RegExp(`<meta[^>]+(?:property|name|itemprop)="${p}"[^>]+content="([^"]*)"`)) || [])[1] || '');
+  const cats = (h.match(/<ul id="ulCategory">([\s\S]*?)<\/ul>/) || [])[1] || '';
+  const firstCat = (cats.match(/<li[^>]*>([\s\S]*?)<\/li>/) || [])[1] || '';
+  const pages = (h.match(/<li>(\d+)\s*쪽<\/li>/) || [])[1];
+  return {
+    isbn13: meta('og:barcode'), cover_url: meta('og:image'), author: meta('author'), pub_date: (h.match(/itemprop="datePublished" content="([^"]+)"/) || [])[1] || '',
+    pages: pages ? Number(pages) : null, aladin_category: strip(firstCat.replace(/<a[^>]*foreignCategory[\s\S]*$/, '')), description: meta('og:description'),
+    aladin_link: `https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=${itemId}`, source: 'aladin',
+  };
+}
+
 async function aladinSearch(q: string, type: string) {
+  if (!ALADIN) return webSearch(type === 'ISBN' ? q.replace(/[^0-9Xx]/g, '') : q);
   if (ALADIN) {
     if (type === 'ISBN') return [await aladinLookup(q.replace(/[^0-9Xx]/g, ''))].filter(Boolean);
     const qt = type === 'Title' ? 'Title' : type === 'Author' ? 'Author' : 'Keyword';
@@ -74,7 +116,12 @@ async function aladinSearch(q: string, type: string) {
   const d = await r.json();
   return (d.items || []).map(fromGoogle);
 }
-async function aladinLookup(isbn: string): Promise<BookOut | null> {
+async function aladinLookup(isbn: string, itemId = ''): Promise<any> {
+  if (!ALADIN) {
+    let id = itemId;
+    if (!id && isbn) id = (await webSearch(isbn))[0]?.item_id || '';
+    return id ? await webLookup(id) : null;
+  }
   if (!isbn) return null;
   if (ALADIN) {
     const idType = isbn.length === 13 ? 'ISBN13' : 'ISBN';
@@ -192,10 +239,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action;
 
-    if (action === 'status') return json({ aladin: !!ALADIN, search: ALADIN ? 'aladin' : 'google', ai: aiProvider, notion: !!NOTION });
+    if (action === 'status') return json({ aladin: !!ALADIN, search: ALADIN ? 'aladin' : 'aladin-web', ai: aiProvider, notion: !!NOTION });
 
-    if (action === 'search') return json({ items: await aladinSearch(String(body.q || ''), String(body.type || 'Keyword')), source: ALADIN ? 'aladin' : 'google' });
-    if (action === 'lookup') return json({ item: await aladinLookup(String(body.isbn || '')) });
+    if (action === 'search') return json({ items: await aladinSearch(String(body.q || ''), String(body.type || 'Keyword')), source: ALADIN ? 'aladin' : 'aladin-web' });
+    if (action === 'lookup') return json({ item: await aladinLookup(String(body.isbn || ''), String(body.item_id || '')) });
 
     if (action === 'img') {
       const u = new URL(String(body.url || ''));

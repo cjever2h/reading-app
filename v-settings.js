@@ -23,7 +23,7 @@ export async function renderSettings(el) {
   <div class="card">
     <h3>연결 상태</h3>
     <ul class="status-list">
-      <li><b>도서 검색</b> ${api.search === 'aladin' ? '<span class="ok">알라딘 OpenAPI 연결됨</span>' : '<span class="warn-t">알라딘 TTB 키 등록 전 · Google Books로 임시 검색 중</span>'}</li>
+      <li><b>도서 검색</b> ${api.search === 'aladin' ? '<span class="ok">알라딘 OpenAPI 연결됨</span>' : '<span class="warn-t">알라딘 TTB 키 등록 전 · 알라딘 공개 검색 페이지로 임시 검색 중 (키를 넣으면 공식 API로 자동 전환)</span>'}</li>
       <li><b>AI 가이드</b> ${api.ai ? `<span class="ok">${esc(api.ai)} 연결됨</span>` : '<span class="warn-t">AI 키 등록 전 · 질문·힌트 중심 가이드로 동작</span>'}</li>
       <li><b>사진 문장 인식</b> ${api.ai ? '<span class="ok">AI 인식</span>' : '<span class="muted">브라우저 인식(Tesseract)</span>'}</li>
     </ul>
