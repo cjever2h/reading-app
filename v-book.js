@@ -6,7 +6,7 @@ import { quoteModal, noteModal, bookEditModal, sessionModal } from './forms.js';
 import { bookSeconds, lastPage, progress, pagesOf, ensureReviews, aiOn } from './calc.js';
 import { go, refresh } from './app.js';
 import { MODES } from './guide-data.js';
-import { notebookMarkdown, reviewDraft, cardNewsCopy, threadsDraft, discussionMarkdown, aiPolish, sendToNotion } from './export.js';
+import { sourceLine, notebookMarkdown, reviewDraft, cardNewsCopy, threadsDraft, discussionMarkdown, aiPolish, sendToNotion } from './export.js';
 import { renderDBPanel } from './v-db.js';
 import { certModal } from './cert.js';
 
@@ -109,7 +109,7 @@ function tabInfo(T, b) {
     </div>
     ${b.toc ? `<details class="card"><summary><b>목차</b></summary><div class="pre-wrap small">${esc(b.toc)}</div></details>` : ''}
     ${b.description ? `<details class="card" ${hasPre ? '' : 'open'}><summary><b>책 소개</b></summary><p class="small">${nl2br(b.description)}</p></details>` : ''}
-    ${b.source === 'aladin' ? `<p class="muted small">도서 정보 출처: <a href="${esc(b.aladin_link || 'https://www.aladin.co.kr')}" target="_blank" rel="noopener">알라딘</a></p>` : b.source === 'google' ? '<p class="muted small">도서 정보 출처: Google Books</p>' : ''}
+    <p class="muted small">${esc(sourceLine(b).replace(/ https?:\S+$/, ''))}${b.aladin_link ? ` · <a href="${esc(b.aladin_link)}" target="_blank" rel="noopener">알라딘에서 보기</a>` : ''}</p>
   `;
   T.querySelector('[data-go]').onclick = e => go(e.target.dataset.go);
   T.querySelector('#pref').onsubmit = async e => {

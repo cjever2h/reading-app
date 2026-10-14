@@ -4,6 +4,7 @@ import { S } from './db.js';
 import { fmtDur, NOTE_KINDS, stars } from './ui.js';
 import { bookSeconds, systemPrompt } from './calc.js';
 
+export const sourceLine = b => b.source === 'kakao' ? `도서 정보: 카카오 책 검색${b.pages || b.aladin_category ? ' (쪽수·분류: 알라딘)' : ''}` : b.source === 'aladin' ? `도서 정보: 알라딘 ${b.aladin_link || ''}`.trim() : b.source === 'google' ? '도서 정보: Google Books' : '도서 정보: 직접 입력';
 const T = b => String(b.title || '').split(/\s*:\s+/)[0];
 const quoteLine = q => `> ${q.body}${q.page ? ` (p.${q.page})` : ''}`;
 
@@ -50,7 +51,7 @@ export function notebookMarkdown(bookId) {
   [['blog', '블로그 서평'], ['card', '카드뉴스'], ['threads', '스레드'], ['club', '독서모임 발제']].forEach(([k, v]) => L.push(`- [${cu[k] ? 'x' : ' '}] ${v}`));
   const free = notes.filter(n => n.kind === 'free' || n.kind === 'pre');
   if (free.length) { L.push('## 기타 노트'); free.forEach(n => { L.push(`### ${n.title || NOTE_KINDS[n.kind]} (${n.note_date})`); L.push(n.body); }); }
-  if (b.source === 'aladin') L.push('---', `도서 정보 출처: 알라딘 ${b.aladin_link || ''}`);
+  L.push('---', sourceLine(b));
   return L.join('\n');
 }
 
@@ -77,7 +78,7 @@ export function reviewDraft(bookId) {
   L.push('', '## 이 책 이후 실제로 바뀐 것 (내 이야기)', sm.action_item ? `액션 아이템: ${sm.action_item}` : '', '(실제로 해본 결과를 직접 작성)');
   L.push('', `나의 한 줄 평: ${sm.one_line || '(직접 작성)'}`);
   if ((sm.concepts || []).length) L.push('', (sm.concepts || []).map(c => '#' + c.replace(/\s+/g, '')).join(' '));
-  if (b.source === 'aladin') L.push('', '도서 정보: 알라딘');
+  L.push('', sourceLine(b));
   L.push('', '※ AI 초안은 뼈대일 뿐이에요. 계기·내 경험·바뀐 것을 넣어야 후기가 살아나요. (원고 4-5)');
   return L.join('\n').replace(/\n{3,}/g, '\n\n');
 }

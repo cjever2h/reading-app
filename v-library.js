@@ -22,7 +22,7 @@ export function renderLibrary(el) {
   list.sort(sorters[view.sort]);
 
   el.innerHTML = `
-  <div class="sec-head"><h1>서재</h1><button class="btn primary" data-add>+ 알라딘에서 책 추가</button></div>
+  <div class="sec-head"><h1>서재</h1><button class="btn primary" data-add>+ 책 검색해서 추가</button></div>
   <div class="tabs">${[['reading', '읽는 중'], ['want', '읽고 싶은 책'], ['done', '완독'], ['all', '전체']].map(([k, v]) => `<button class="${view.status === k ? 'on' : ''}" data-st="${k}">${v} <span class="muted">${count(k)}</span></button>`).join('')}</div>
   <div class="filters row gap wrap">
     <input class="grow" placeholder="서재에서 찾기" value="${esc(view.q)}" data-q>

@@ -120,7 +120,7 @@ export function noteModal({ bookId = null, kind = 'free', note = null, onSaved }
 
 /* ---------- 알라딘 검색으로 책 추가 ---------- */
 export function searchModal({ onAdded } = {}) {
-  const src = S.apiStatus?.search === 'aladin' ? '알라딘 OpenAPI' : '알라딘 (TTB 키 등록 전 임시 검색)';
+  const src = S.apiStatus?.search === 'kakao' ? '카카오 책 검색 (쪽수·분류는 알라딘에서 보충)' : '알라딘 공개 검색 페이지 (카카오 키 연결 전 임시)';
   const m = openModal(`
     <h3>책 추가</h3>
     <form class="row gap wrap" id="sf">

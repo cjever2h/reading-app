@@ -1,6 +1,6 @@
 // Supabase Edge Function: api
-// 알라딘 OpenAPI 프록시(키 노출·CORS 방지), AI 가이드 대화, 표지 이미지 프록시, 노션 전송, OCR
-// Secrets: ALADIN_TTB_KEY, GEMINI_API_KEY | OPENAI_API_KEY | ANTHROPIC_API_KEY, (선택) NOTION_TOKEN
+// 도서 검색 프록시(카카오 책 검색 + 알라딘 공개 페이지 보충, 키 노출·CORS 방지), AI 가이드 대화, 표지 이미지 프록시, 노션 전송, OCR
+// Secrets: KAKAO_REST_KEY (카카오 책 검색), GEMINI_API_KEY | OPENAI_API_KEY | ANTHROPIC_API_KEY, (선택) NOTION_TOKEN
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CORS = {
@@ -10,7 +10,7 @@ const CORS = {
 };
 const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const ALADIN = Deno.env.get('ALADIN_TTB_KEY') || '';
+const KAKAO = Deno.env.get('KAKAO_REST_KEY') || '';
 const GEMINI = Deno.env.get('GEMINI_API_KEY') || '';
 const OPENAI = Deno.env.get('OPENAI_API_KEY') || '';
 const ANTHROPIC = Deno.env.get('ANTHROPIC_API_KEY') || '';
@@ -27,40 +27,42 @@ async function authUser(req: Request) {
 }
 
 /* ---------- 도서 검색 ---------- */
-type BookOut = { isbn13: string; title: string; author: string; publisher: string; pub_date: string; cover_url: string; pages: number | null; aladin_category: string; aladin_link: string; description: string; toc?: string; source: string; item_id?: string; isbn10?: string };
+// 1순위: 카카오 책 검색 API (공식, KAKAO_REST_KEY)
+// 보충: 카카오에는 쪽수·분류가 없어서 알라딘 공개 상품 페이지에서 쪽수·분류·큰 표지만 읽어 채운다 (실패하면 직접 입력)
+// 키가 없을 때: 알라딘 공개 검색 페이지 (알라딘 OpenAPI는 2026-10-30 종료)
+type BookOut = { isbn13: string; title: string; author: string; publisher: string; pub_date: string; cover_url: string; pages: number | null; aladin_category: string; aladin_link: string; description: string; toc?: string; source: string; item_id?: string; isbn10?: string; info_link?: string };
 
-function fromAladin(it: any): BookOut {
-  return {
-    isbn13: it.isbn13 || it.isbn || '',
-    title: it.title || '',
-    author: it.author || '',
-    publisher: it.publisher || '',
-    pub_date: it.pubDate || '',
-    cover_url: (it.cover || '').replace(/^http:/, 'https:'),
-    pages: it.subInfo?.itemPage ?? null,
-    aladin_category: it.categoryName || '',
-    aladin_link: (it.link || '').replace(/&amp;/g, '&'),
-    description: it.description || '',
-    toc: it.subInfo?.toc || '',
-    source: 'aladin',
-  };
-}
-function fromGoogle(v: any): BookOut {
-  const i = v.volumeInfo || {};
-  const ids = i.industryIdentifiers || [];
-  const isbn = (ids.find((x: any) => x.type === 'ISBN_13') || ids.find((x: any) => x.type === 'ISBN_10') || {}).identifier || '';
-  const img = i.imageLinks?.thumbnail || i.imageLinks?.smallThumbnail || '';
-  return {
-    isbn13: isbn, title: [i.title, i.subtitle].filter(Boolean).join(': '), author: (i.authors || []).join(', '), publisher: i.publisher || '',
-    pub_date: i.publishedDate || '', cover_url: img.replace(/^http:/, 'https:').replace('&edge=curl', ''), pages: i.pageCount ?? null,
-    aladin_category: (i.categories || []).join(' > '), aladin_link: i.infoLink || '', description: i.description || '', source: 'google',
-  };
-}
-
-/* ---------- TTB 키 등록 전 임시: 알라딘 공개 검색 페이지에서 기본 정보만 읽기 ---------- */
 const UA = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36', 'Accept-Language': 'ko-KR,ko;q=0.9' };
 const decode = (s: string) => s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
 const strip = (s: string) => decode(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+
+/* 카카오 */
+function kakaoCover(thumb: string) {
+  // search1.kakaocdn.net/thumb/R120x174.q85/?fname=<원본> → 원본 이미지 주소가 더 크다
+  try { const f = new URL(thumb).searchParams.get('fname'); if (f) return decodeURIComponent(f).replace(/^http:/, 'https:'); } catch { /* ignore */ }
+  return (thumb || '').replace(/^http:/, 'https:');
+}
+function fromKakao(d: any): BookOut {
+  const isbns = String(d.isbn || '').split(/\s+/).filter(Boolean);
+  const authors = (d.authors || []).join(', ');
+  const tr = (d.translators || []).length ? ` (옮긴이: ${(d.translators || []).join(', ')})` : '';
+  return {
+    isbn13: isbns.find(x => x.length === 13) || '', isbn10: isbns.find(x => x.length === 10) || '',
+    title: d.title || '', author: authors + tr, publisher: d.publisher || '', pub_date: String(d.datetime || '').slice(0, 10),
+    cover_url: kakaoCover(d.thumbnail || ''), pages: null, aladin_category: '', aladin_link: '', info_link: d.url || '',
+    description: String(d.contents || '').trim(), source: 'kakao',
+  };
+}
+async function kakaoSearch(q: string, type: string): Promise<BookOut[]> {
+  const target = type === 'Title' ? 'title' : type === 'Author' ? 'person' : type === 'ISBN' ? 'isbn' : '';
+  const qq = type === 'ISBN' ? q.replace(/[^0-9Xx]/g, '') : q;
+  const r = await fetch(`https://dapi.kakao.com/v3/search/book?query=${encodeURIComponent(qq)}&size=20${target ? `&target=${target}` : ''}`, { headers: { Authorization: `KakaoAK ${KAKAO}` } });
+  const d = await r.json();
+  if (!r.ok) throw new Error(`카카오 검색 오류: ${d.message || d.msg || r.status}`);
+  return (d.documents || []).map(fromKakao);
+}
+
+/* 알라딘 공개 페이지 (보충·대체) */
 async function webSearch(q: string): Promise<BookOut[]> {
   const r = await fetch(`https://www.aladin.co.kr/search/wsearchresult.aspx?SearchTarget=Book&SearchWord=${encodeURIComponent(q)}`, { headers: UA });
   const html = await r.text();
@@ -98,48 +100,21 @@ async function webLookup(itemId: string): Promise<Partial<BookOut> | null> {
   };
 }
 
-async function aladinSearch(q: string, type: string) {
-  if (!ALADIN) return webSearch(type === 'ISBN' ? q.replace(/[^0-9Xx]/g, '') : q);
-  if (ALADIN) {
-    if (type === 'ISBN') return [await aladinLookup(q.replace(/[^0-9Xx]/g, ''))].filter(Boolean);
-    const qt = type === 'Title' ? 'Title' : type === 'Author' ? 'Author' : 'Keyword';
-    const u = `https://www.aladin.co.kr/ttb/api/ItemSearch.aspx?ttbkey=${ALADIN}&Query=${encodeURIComponent(q)}&QueryType=${qt}&MaxResults=20&start=1&SearchTarget=Book&output=js&Version=20131101&Cover=Big`;
-    const r = await fetch(u);
-    const t = await r.text();
-    const d = JSON.parse(t.replace(/;\s*$/, ''));
-    if (d.errorCode) throw new Error(`알라딘 오류: ${d.errorMessage}`);
-    return (d.item || []).map(fromAladin);
-  }
-  const prefix = type === 'Title' ? 'intitle:' : type === 'Author' ? 'inauthor:' : type === 'ISBN' ? 'isbn:' : '';
-  const qq = type === 'ISBN' ? q.replace(/[^0-9Xx]/g, '') : q;
-  const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(prefix + qq)}&maxResults=20&printType=books`);
-  const d = await r.json();
-  return (d.items || []).map(fromGoogle);
+async function bookSearch(q: string, type: string) {
+  if (KAKAO) return kakaoSearch(q, type);
+  return webSearch(type === 'ISBN' ? q.replace(/[^0-9Xx]/g, '') : q);
 }
-async function aladinLookup(isbn: string, itemId = ''): Promise<any> {
-  if (!ALADIN) {
-    let id = itemId;
+/** 상세: 카카오 결과에 쪽수·분류를 알라딘 공개 상품 페이지에서 보충 */
+async function bookLookup(isbn: string, itemId = ''): Promise<any> {
+  let id = itemId;
+  try {
     if (!id && isbn) id = (await webSearch(isbn))[0]?.item_id || '';
-    return id ? await webLookup(id) : null;
-  }
-  if (!isbn) return null;
-  if (ALADIN) {
-    const idType = isbn.length === 13 ? 'ISBN13' : 'ISBN';
-    const u = `https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx?ttbkey=${ALADIN}&itemIdType=${idType}&ItemId=${isbn}&output=js&Version=20131101&Cover=Big&OptResult=Toc,fulldescription`;
-    const r = await fetch(u);
-    const t = await r.text();
-    const d = JSON.parse(t.replace(/;\s*$/, ''));
-    if (d.errorCode) throw new Error(`알라딘 오류: ${d.errorMessage}`);
-    const it = (d.item || [])[0];
-    if (!it) return null;
-    const out = fromAladin(it);
-    if (it.fulldescription) out.description = String(it.fulldescription).replace(/<[^>]+>/g, '').slice(0, 3000);
-    if (out.toc) out.toc = String(out.toc).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
-    return out;
-  }
-  const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
-  const d = await r.json();
-  return d.items?.[0] ? fromGoogle(d.items[0]) : null;
+    if (!id) return null;
+    const w = await webLookup(id);
+    if (!w) return null;
+    if (KAKAO) return { pages: w.pages, aladin_category: w.aladin_category, aladin_link: w.aladin_link, cover_url: w.cover_url }; // 카카오 정보는 유지
+    return w;
+  } catch { return null; }
 }
 
 /* ---------- AI ---------- */
@@ -239,10 +214,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action;
 
-    if (action === 'status') return json({ aladin: !!ALADIN, search: ALADIN ? 'aladin' : 'aladin-web', ai: aiProvider, notion: !!NOTION });
+    if (action === 'status') return json({ kakao: !!KAKAO, search: KAKAO ? 'kakao' : 'aladin-web', ai: aiProvider, notion: !!NOTION });
 
-    if (action === 'search') return json({ items: await aladinSearch(String(body.q || ''), String(body.type || 'Keyword')), source: ALADIN ? 'aladin' : 'aladin-web' });
-    if (action === 'lookup') return json({ item: await aladinLookup(String(body.isbn || ''), String(body.item_id || '')) });
+    if (action === 'search') return json({ items: await bookSearch(String(body.q || ''), String(body.type || 'Keyword')), source: KAKAO ? 'kakao' : 'aladin-web' });
+    if (action === 'lookup') return json({ item: await bookLookup(String(body.isbn || ''), String(body.item_id || '')) });
 
     if (action === 'img') {
       const u = new URL(String(body.url || ''));

@@ -23,11 +23,11 @@ export async function renderSettings(el) {
   <div class="card">
     <h3>연결 상태</h3>
     <ul class="status-list">
-      <li><b>도서 검색</b> ${api.search === 'aladin' ? '<span class="ok">알라딘 OpenAPI 연결됨</span>' : '<span class="warn-t">알라딘 TTB 키 등록 전 · 알라딘 공개 검색 페이지로 임시 검색 중 (키를 넣으면 공식 API로 자동 전환)</span>'}</li>
+      <li><b>도서 검색</b> ${api.search === 'kakao' ? '<span class="ok">카카오 책 검색 API 연결됨</span> <span class="muted">(쪽수·분류는 알라딘 상품 페이지에서 보충)</span>' : '<span class="warn-t">카카오 키 연결 전 · 알라딘 공개 검색 페이지로 임시 검색 중</span>'}</li>
       <li><b>AI 가이드</b> ${api.ai ? `<span class="ok">${esc(api.ai)} 연결됨</span>` : '<span class="warn-t">AI 키 등록 전 · 질문·힌트 중심 가이드로 동작</span>'}</li>
       <li><b>사진 문장 인식</b> ${api.ai ? '<span class="ok">AI 인식</span>' : '<span class="muted">브라우저 인식(Tesseract)</span>'}</li>
     </ul>
-    <p class="muted small">키는 Supabase Edge Function 비밀값(ALADIN_TTB_KEY, GEMINI_API_KEY 등)으로만 보관돼요. 브라우저에는 노출되지 않아요.</p>
+    <p class="muted small">키는 Supabase Edge Function 비밀값(KAKAO_REST_KEY, GEMINI_API_KEY 등)으로만 보관돼요. 브라우저에는 노출되지 않아요.</p>
   </div>
 
   <form class="card form" id="f2">
@@ -55,7 +55,7 @@ export async function renderSettings(el) {
     <label>새 비밀번호<input type="password" name="pw" minlength="6" autocomplete="new-password"></label>
     <div class="row gap end"><button class="btn small">비밀번호 변경</button><button type="button" class="btn small danger" data-logout>로그아웃</button></div>
   </form>
-  <p class="muted small center">독서앱 · 도서 정보 제공: 알라딘</p>`;
+  <p class="muted small center">독서앱 · 도서 정보 제공: 카카오 책 검색, 알라딘</p>`;
 
   el.querySelector('#f1').onsubmit = async e => {
     e.preventDefault(); const fd = new FormData(e.target);

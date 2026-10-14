@@ -143,6 +143,6 @@ export async function proxiedImage(url) {
   } catch { return null; }
 }
 export async function loadApiStatus() {
-  try { S.apiStatus = await api('status'); } catch { S.apiStatus = { aladin: false, ai: null, notion: false, offline: true }; }
+  try { S.apiStatus = await api('status'); } catch { S.apiStatus = { kakao: false, ai: null, notion: false, offline: true }; }
   return S.apiStatus;
 }

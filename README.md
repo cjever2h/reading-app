@@ -14,7 +14,7 @@
 - 빌드 없는 정적 사이트(Vercel). 데이터는 Supabase(Postgres + RLS + Storage), 로그인 계정별로 분리.
 - `api` Edge Function(`edge-function-api.ts`): 알라딘 OpenAPI 프록시, AI 대화, 표지 이미지 프록시, 노션 전송, OCR.
 - 비밀값(Supabase → Edge Functions → Secrets)
-  - `ALADIN_TTB_KEY`: 알라딘 TTB 키. 없으면 알라딘 공개 검색 페이지에서 기본 정보만 읽는 임시 모드.
+  - `KAKAO_REST_KEY`: 카카오 책 검색 REST API 키. 카카오에 없는 쪽수·분류는 알라딘 공개 상품 페이지에서 보충. 키가 없으면 알라딘 공개 검색 페이지로 검색. (알라딘 OpenAPI는 2026-10-30 종료)
   - `GEMINI_API_KEY` 또는 `OPENAI_API_KEY` 또는 `ANTHROPIC_API_KEY`: AI 가이드·OCR. 없으면 질문·힌트 중심 가이드와 브라우저 OCR로 동작.
   - (선택) `NOTION_TOKEN`: 설정 화면에 토큰을 넣지 않을 때 쓰는 기본 노션 토큰.
 - `schema.sql`: 테이블(books, reading_sessions, quotes, notes, summaries, action_experiments, review_tasks, guide_sessions, settings), 태그 뷰(tag_index), RLS, 사진 버킷.
@@ -24,4 +24,4 @@
 
 가이드 문구의 출처는 『AI가 각인시켜주는 독서법』(읽는 사람, 명왕성)이에요. 부록 A(장르별 프롬프트)와 부록 D(상황별 빠른 참조 카드 12종)는 원문 그대로 넣었고, 본문의 모르면 즉시 묻기 3단계, 속도 조절 4유형, 메모 3종, 72시간 루틴, 핵심 논지 압축 순서, 파인만 기법, 적용 3단계, 콘텐츠·발제 구조를 따랐어요. 원고에 없는 역사·역사소설 장르는 인문철학·소설문학 프롬프트를 옮겨 구성했어요. 설정에서 고쳐 쓸 수 있어요.
 
-도서 정보 제공: 알라딘 (TTB 키 등록 시)
+도서 정보 제공: 카카오 책 검색, 알라딘

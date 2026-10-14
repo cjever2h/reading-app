@@ -62,7 +62,7 @@ export function renderHome(el) {
             <button class="btn small" data-go="#/guide/new/during?book=${b.id}">읽는 중 가이드</button>
           </div>
         </div></div>`;
-    }).join('')}</div>` : `<div class="card empty"><p>읽는 중인 책이 없어요.</p><button class="btn primary" data-add>알라딘에서 책 찾기</button></div>`}
+    }).join('')}</div>` : `<div class="card empty"><p>읽는 중인 책이 없어요.</p><button class="btn primary" data-add>책 찾기</button></div>`}
   </section>
 
   <section class="card daily-cta ${dailyDone ? 'done' : ''}">
