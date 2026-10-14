@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1d2b24" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="독서앱" />
+  <meta name="description" content="독서 타이머 · 문장 수집 · 독서노트 · AI각인 독서가이드 · 72시간 복습" />
+  <title>독서앱 | AI각인 독서기록</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <section id="auth-view" class="auth hidden">
+    <div class="auth-card">
+      <img src="icon-192.png" alt="" class="auth-logo" />
+      <h1>독서앱</h1>
+      <p class="muted">읽은 시간 · 남은 문장 · 독서노트 · AI각인 독서가이드</p>
+      <form id="auth-form" class="form">
+        <label>이메일<input type="email" id="auth-email" required autocomplete="email" /></label>
+        <label>비밀번호<input type="password" id="auth-password" required minlength="6" autocomplete="current-password" /></label>
+        <div class="row gap">
+          <button type="submit" class="btn primary grow" data-mode="signin">로그인</button>
+          <button type="submit" class="btn grow" data-mode="signup">회원가입</button>
+        </div>
+        <button type="button" class="link small" id="auth-reset">비밀번호를 잊었어요</button>
+        <p id="auth-msg" class="error small"></p>
+      </form>
+      <p class="muted small">휴대폰과 데스크톱에서 같은 계정으로 로그인하면 같은 기록을 봐요.</p>
+    </div>
+  </section>
+
+  <div id="app-view" class="hidden">
+    <header class="topbar">
+      <a href="#/home" class="brand"><img src="icon-192.png" alt="" /> 독서앱</a>
+      <nav class="nav top-nav">
+        <a href="#/home" data-tab="home">홈</a>
+        <a href="#/library" data-tab="library">서재</a>
+        <a href="#/timer" data-tab="timer">타이머</a>
+        <a href="#/db" data-tab="db">문장·노트</a>
+        <a href="#/guide" data-tab="guide">가이드</a>
+        <a href="#/stats" data-tab="stats">통계·설정</a>
+      </nav>
+      <span id="user-email" class="muted small user-email"></span>
+    </header>
+    <button id="timer-pill" class="timer-pill hidden"></button>
+    <main id="view"></main>
+    <nav class="nav bottom-nav">
+      <a href="#/home" data-tab="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>홈</a>
+      <a href="#/library" data-tab="library"><svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 4.5l3.8 1-3.9 15-3.8-1z"/></svg>서재</a>
+      <a href="#/timer" data-tab="timer" class="center-tab"><svg viewBox="0 0 24 24"><path d="M9 2h6v2H9zM12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm1 8.4V9h-2v6l4 2.4 1-1.7z"/></svg>타이머</a>
+      <a href="#/db" data-tab="db"><svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13H6zM14 3v6h6M9 13h8M9 17h8"/></svg>문장·노트</a>
+      <a href="#/guide" data-tab="guide"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4zM8 9h8M8 12h5"/></svg>가이드</a>
+      <a href="#/stats" data-tab="stats"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>통계</a>
+    </nav>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
