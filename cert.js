@@ -24,9 +24,14 @@ function wrapLines(ctx, text, maxW, maxLines = 99) {
   const lines = [];
   for (const para of String(text).split('\n')) {
     let line = '';
-    for (const ch of para) {
-      const t = line + ch;
-      if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = ch.trimStart(); } else line = t;
+    for (const tok of para.split(/(\s+)/)) {
+      const t = line + tok;
+      if (ctx.measureText(t).width <= maxW) { line = t; continue; }
+      if (line.trim() && ctx.measureText(tok.trim()).width <= maxW) { lines.push(line.trimEnd()); line = tok.trimStart(); continue; }
+      for (const ch of tok) { // 너무 긴 단어는 글자 단위로
+        const t2 = line + ch;
+        if (ctx.measureText(t2).width > maxW && line) { lines.push(line.trimEnd()); line = ch.trimStart(); } else line = t2;
+      }
     }
     lines.push(line);
   }
@@ -134,12 +139,12 @@ export async function drawCert(canvas, d) {
 
   const top = P + 80, bottom = H - P - 50;
   if (!story && d.photo) {
-    photoBox(top, 480, true);
-    let y = top + 480 + 36;
+    photoBox(top, 460, true);
+    let y = top + 460 + 36;
     const cw = 150; coverBox(P, y, cw);
     const tx = P + cw + 36, tw = W - tx - P;
-    titleBlock(tx, y - 10, tw, 40);
-    const sy = y + Math.round(cw * 1.45) - 64;
+    const th = titleBlock(tx, y - 10, tw, 40);
+    const sy = Math.max(y - 10 + th + 56, y + Math.round(cw * 1.45) - 56);
     const colW = tw / 3;
     stats.forEach(([k, v], i) => {
       ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 24); ctx.fillText(k, tx + i * colW, sy);

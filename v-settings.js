@@ -55,7 +55,7 @@ export async function renderSettings(el) {
     <label>새 비밀번호<input type="password" name="pw" minlength="6" autocomplete="new-password"></label>
     <div class="row gap end"><button class="btn small">비밀번호 변경</button><button type="button" class="btn small danger" data-logout>로그아웃</button></div>
   </form>
-  <p class="muted small center">독서앱 · 도서 정보 제공: 알라딘 (키 등록 시)</p>`;
+  <p class="muted small center">독서앱 · 도서 정보 제공: 알라딘</p>`;
 
   el.querySelector('#f1').onsubmit = async e => {
     e.preventDefault(); const fd = new FormData(e.target);
