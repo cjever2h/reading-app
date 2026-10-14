@@ -4,6 +4,7 @@ import { S } from './db.js';
 import { fmtDur, NOTE_KINDS, stars } from './ui.js';
 import { bookSeconds, systemPrompt } from './calc.js';
 
+const T = b => String(b.title || '').split(/\s*:\s+/)[0];
 const quoteLine = q => `> ${q.body}${q.page ? ` (p.${q.page})` : ''}`;
 
 export function notebookMarkdown(bookId) {
@@ -54,7 +55,7 @@ export function reviewDraft(bookId) {
   const picked = kq.length ? kq : qs.slice(0, 3).map(q => ({ text: q.body, page: q.page, reason: q.memo }));
   const thoughts = qs.filter(q => q.memo).slice(0, 4);
   const L = [];
-  L.push(`# [서평] ${b.title}${sm.one_line ? ` | ${sm.one_line}` : ''}`);
+  L.push(`# [서평] ${T(b)}${sm.one_line ? ` | ${sm.one_line}` : ''}`);
   L.push(`**책 정보** ${b.title} / ${b.author || ''} / ${b.publisher || ''}${b.pub_date ? ` (${b.pub_date.slice(0, 4)})` : ''}${b.pages ? ` / ${b.pages}쪽` : ''}`);
   L.push(`**읽은 기간** ${b.start_date || ''} ~ ${b.finish_date || ''} · 총 독서 시간 ${fmtDur(bookSeconds(bookId))}${b.rating ? ` · 나의 별점 ${b.rating}/5` : ''}`);
   L.push('', '## 이 책을 읽게 된 이유', b.reason || pre.expect || '(직접 작성)');
@@ -79,7 +80,7 @@ export function cardNewsCopy(bookId) {
   const kq = (sm.key_quotes || []).filter(k => k.text);
   const picked = (kq.length ? kq : qs.slice(0, 3).map(q => ({ text: q.body, page: q.page, reason: q.memo }))).slice(0, 3);
   const L = [];
-  L.push(`[카드 1 · 표지]`, `${b.title}`, `${b.author || ''}`, `훅 문구(직접 다듬기): ${sm.one_line || '이 책이 나에게 남긴 한 가지'}`, '');
+  L.push(`[카드 1 · 표지]`, `${T(b)}`, `${b.author || ''}`, `훅 문구(직접 다듬기): ${sm.one_line || '이 책이 나에게 남긴 한 가지'}`, '');
   picked.forEach((k, i) => {
     L.push(`[카드 ${i + 2} · 기억할 한 문장]`, `"${k.text}"`, k.page ? `- p.${k.page}` : '', k.reason ? `내 생각: ${k.reason}` : '', '');
   });
@@ -87,7 +88,7 @@ export function cardNewsCopy(bookId) {
   L.push(`[카드 ${n} · 나의 한 줄 평]`, sm.one_line || '(직접 작성)', '');
   L.push(`[카드 ${n + 1} · 오늘의 실천]`, sm.action_item || '(직접 작성)', '');
   L.push(`[카드 ${n + 2} · 마무리]`, '여러분에게 가장 남은 문장은 무엇인가요?', '댓글로 나눠주세요.', '');
-  L.push('---', '[캡션 초안]', `${b.title} (${b.author || ''})`, '', sm.one_line ? `제 한 줄 평은 이렇습니다. "${sm.one_line}"` : '', '', sm.action_item ? `이 책을 읽고 해볼 한 가지: ${sm.action_item}` : '', '',
+  L.push('---', '[캡션 초안]', `${T(b)} (${b.author || ''})`, '', sm.one_line ? `제 한 줄 평은 이렇습니다. "${sm.one_line}"` : '', '', sm.action_item ? `이 책을 읽고 해볼 한 가지: ${sm.action_item}` : '', '',
     ['독서', '책추천', '독서기록', ...(sm.concepts || [])].map(c => '#' + c.replace(/\s+/g, '')).join(' '));
   L.push('', '※ "기억할 한 문장"은 책의 실제 문장만 사용. 나의 해석은 "내 생각/나의 한 줄 평"으로 구분.');
   return L.filter(x => x !== undefined).join('\n');
@@ -97,9 +98,9 @@ export function threadsDraft(bookId) {
   const b = db.book(bookId); const sm = db.summaryOf(bookId) || {};
   const q = (sm.key_quotes || []).find(k => k.text) || (db.byBook('quotes', bookId)[0] ? { text: db.byBook('quotes', bookId)[0].body } : null);
   return [
-    `[1] (첫 문장 후킹, 직접 다듬기) ${sm.one_line || b.title + '을 읽고 남은 한 가지'}`,
+    `[1] (첫 문장 후킹, 직접 다듬기) ${sm.one_line || T(b) + '을 읽고 남은 한 가지'}`,
     '',
-    `[2] ${b.title} (${b.author || ''})에서 가장 남은 문장`,
+    `[2] ${T(b)} (${b.author || ''})에서 가장 남은 문장`,
     q ? `"${q.text}"` : '(문장 선택)',
     '',
     `[3] 제 한 줄 평은 이렇습니다. ${sm.one_line || '(직접 작성)'}`,
@@ -113,7 +114,7 @@ export function discussionQuestions(bookId) {
   const b = db.book(bookId); const sm = db.summaryOf(bookId) || {};
   const qs = db.byBook('quotes', bookId);
   const out = [];
-  out.push({ type: '여는 질문', q: `『${b.title}』을 한 단어(또는 한 문장)로 표현한다면? 그 이유는?` });
+  out.push({ type: '여는 질문', q: `『${T(b)}』을 한 단어(또는 한 문장)로 표현한다면? 그 이유는?` });
   qs.filter(q => q.memo_type === '의문').slice(0, 3).forEach(q => out.push({ type: '생각을 묻는 질문', q: `"${q.body}"${q.page ? ` (p.${q.page})` : ''} 저자의 이 말에 동의하시나요? 동의하거나 망설여지는 이유는?`, note: q.memo }));
   qs.filter(q => q.memo_type === '연결').slice(0, 2).forEach(q => out.push({ type: '경험을 묻는 질문', q: `"${q.body}"${q.page ? ` (p.${q.page})` : ''} 이 문장을 읽고 떠오른 내 경험이나 다른 책이 있나요?`, note: q.memo }));
   qs.filter(q => q.memo_type === '공감').slice(0, 2).forEach(q => out.push({ type: '경험을 묻는 질문', q: `"${q.body}"${q.page ? ` (p.${q.page})` : ''} 이 문장에 공감했던 순간이 있다면 나눠주세요.`, note: q.memo }));
@@ -124,7 +125,7 @@ export function discussionQuestions(bookId) {
 }
 export const discussionMarkdown = (bookId) => {
   const b = db.book(bookId);
-  return [`# 『${b.title}』 독서모임 발제`, '', ...discussionQuestions(bookId).map((x, i) => `${i + 1}. [${x.type}] ${x.q}${x.note ? `\n   - 발제자 메모: ${x.note}` : ''}`)].join('\n');
+  return [`# 『${T(b)}』 독서모임 발제`, '', ...discussionQuestions(bookId).map((x, i) => `${i + 1}. [${x.type}] ${x.q}${x.note ? `\n   - 발제자 메모: ${x.note}` : ''}`)].join('\n');
 };
 
 export function allMarkdown() {

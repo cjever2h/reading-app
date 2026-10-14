@@ -34,7 +34,8 @@ function filtered(f) {
 function highlight(html, q) {
   if (!q.trim()) return html;
   const safe = esc(q.trim()).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return html.replace(new RegExp(`(>[^<]*?)(${safe})`, 'gi'), '$1<mark>$2</mark>');
+  const re = new RegExp(safe, 'gi');
+  return html.split(/(<[^>]+>)/).map(seg => seg.startsWith('<') ? seg : seg.replace(re, m => `<mark>${m}</mark>`)).join('');
 }
 
 function filterBar(f, compact) {

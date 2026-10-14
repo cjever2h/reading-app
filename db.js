@@ -129,10 +129,14 @@ export async function proxiedImage(url) {
   if (!url) return null;
   if (imgCache.has(url)) return imgCache.get(url);
   try {
-    const { data, error } = await sb.functions.invoke('api', { body: { action: 'img', url } });
-    if (error) throw error;
-    const blob = data instanceof Blob ? data : null;
-    if (!blob) throw new Error('no blob');
+    const { data: ses } = await sb.auth.getSession();
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/api`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${ses.session?.access_token || SUPABASE_ANON_KEY}` },
+      body: JSON.stringify({ action: 'img', url }),
+    });
+    if (!r.ok) throw new Error('img ' + r.status);
+    const blob = await r.blob();
     const u = URL.createObjectURL(blob);
     imgCache.set(url, u);
     return u;

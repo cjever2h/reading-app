@@ -49,100 +49,137 @@ export async function drawCert(canvas, d) {
   const W = 1080, H = story ? 1920 : 1080;
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
-  try { await Promise.all([document.fonts.load(F(800, 40)), document.fonts.load(F(500, 30))]); } catch { /* 기본 글꼴 */ }
-  // 배경
+  try { await Promise.all([document.fonts.load(F(800, 40)), document.fonts.load(F(600, 30)), document.fonts.load(F(500, 30))]); } catch { /* 기본 글꼴 */ }
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#1d2b24'); g.addColorStop(1, '#0f1714');
+  g.addColorStop(0, '#22382f'); g.addColorStop(1, '#0f1714');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const P = 64;
-  let y = P;
+  const P = 64, CW = W - P * 2;
+  const [mainTitle, ...subParts] = String(d.title).split(/\s*:\s+/);
+  const subTitle = subParts.join(': ');
+  const stats = [['읽은 쪽', d.pagesText], ['독서 시간', d.timeText], ['연속 독서', `${d.streak}일`]];
 
   // 상단 라벨
-  ctx.fillStyle = '#e9c46a'; ctx.font = F(700, 30);
-  ctx.fillText('오늘의 독서', P, y + 30);
-  ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = F(500, 30); ctx.textAlign = 'right';
-  ctx.fillText(d.dateText, W - P, y + 30); ctx.textAlign = 'left';
-  y += 60;
-
-  // 페이지 사진
-  const photoH = d.photo ? (story ? 820 : 470) : 0;
-  if (d.photo) {
-    ctx.save(); roundRect(ctx, P, y, W - P * 2, photoH, 28); ctx.clip();
-    drawCover(ctx, d.photo, P, y, W - P * 2, photoH);
-    if (d.quote && !story) {
-      const gg = ctx.createLinearGradient(0, y + photoH * 0.45, 0, y + photoH);
-      gg.addColorStop(0, 'rgba(0,0,0,0)'); gg.addColorStop(1, 'rgba(0,0,0,.78)');
-      ctx.fillStyle = gg; ctx.fillRect(P, y, W - P * 2, photoH);
-      ctx.fillStyle = '#fff'; ctx.font = F(600, 34);
-      const ls = wrapLines(ctx, `“${d.quote}”`, W - P * 2 - 80, 3);
-      ls.forEach((l, i) => ctx.fillText(l, P + 40, y + photoH - 40 - (ls.length - 1 - i) * 48));
-    }
-    ctx.restore();
-    y += photoH + 40;
-  }
-
-  // 책 정보
-  const coverW = d.photo ? (story ? 220 : 170) : (story ? 360 : 300);
-  const coverH = Math.round(coverW * 1.45);
-  if (d.cover) {
-    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
-    roundRect(ctx, P, y, coverW, coverH, 10); ctx.fillStyle = '#333'; ctx.fill(); ctx.restore();
-    ctx.save(); roundRect(ctx, P, y, coverW, coverH, 10); ctx.clip(); drawCover(ctx, d.cover, P, y, coverW, coverH); ctx.restore();
-  } else {
-    roundRect(ctx, P, y, coverW, coverH, 10); ctx.fillStyle = '#2f4a3e'; ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = F(700, 28);
-    wrapLines(ctx, d.title, coverW - 30, 5).forEach((l, i) => ctx.fillText(l, P + 15, y + 50 + i * 38));
-  }
-  const tx = P + coverW + 44, tw = W - tx - P;
-  let ty = y + 8;
-  ctx.fillStyle = '#fff'; ctx.font = F(800, d.photo ? 46 : 54);
-  const tl = wrapLines(ctx, d.title, tw, 3);
-  tl.forEach((l, i) => ctx.fillText(l, tx, ty + 46 + i * (d.photo ? 58 : 66)));
-  ty += 46 + (tl.length - 1) * (d.photo ? 58 : 66) + 44;
-  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = F(500, 30);
-  wrapLines(ctx, d.author, tw, 1).forEach(l => ctx.fillText(l, tx, ty));
-  ty += 40;
-
-  // 수치
-  const stats = [['읽은 쪽', d.pagesText], ['독서 시간', d.timeText], ['연속 독서', `${d.streak}일`]];
-  if (!story) {
-    const sy = Math.max(ty + 30, y + coverH - 120);
-    const colW = tw / 3;
-    stats.forEach(([k, v], i) => {
-      ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 26); ctx.fillText(k, tx + i * colW, sy);
-      ctx.fillStyle = '#e9c46a'; ctx.font = F(800, v.length > 8 ? 34 : 42); ctx.fillText(v, tx + i * colW, sy + 52);
-    });
-    y = Math.max(y + coverH, sy + 70) + 40;
-  } else {
-    y += coverH + 60;
-    const colW = (W - P * 2) / 3;
-    stats.forEach(([k, v], i) => {
-      roundRect(ctx, P + i * colW + (i ? 10 : 0), y, colW - 20, 170, 24); ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 28); ctx.fillText(k, P + i * colW + 34, y + 58);
-      ctx.fillStyle = '#e9c46a'; ctx.font = F(800, v.length > 8 ? 38 : 50); ctx.fillText(v, P + i * colW + 34, y + 130);
-    });
-    y += 220;
-    if (d.quote) {
-      ctx.font = F(600, 40);
-      const ls = wrapLines(ctx, `“${d.quote}”`, W - P * 2 - 80, 6);
-      const qh = ls.length * 58 + 80;
-      roundRect(ctx, P, y, W - P * 2, qh, 28); ctx.fillStyle = 'rgba(233,196,106,.12)'; ctx.fill();
-      ctx.fillStyle = '#fff';
-      ls.forEach((l, i) => ctx.fillText(l, P + 40, y + 70 + i * 58));
-      if (d.quotePage) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 26); ctx.textAlign = 'right'; ctx.fillText(`p.${d.quotePage}`, W - P - 40, y + qh - 24); ctx.textAlign = 'left'; }
-      y += qh + 30;
-    }
-  }
-  // 사진 없는 정사각형에 문장
-  if (!story && !d.photo && d.quote) {
-    ctx.fillStyle = '#fff'; ctx.font = F(600, 36);
-    const ls = wrapLines(ctx, `“${d.quote}”`, W - P * 2, 4);
-    ls.forEach((l, i) => ctx.fillText(l, P, y + 30 + i * 52));
-  }
+  ctx.fillStyle = '#e9c46a'; ctx.font = F(700, 30); ctx.fillText('오늘의 독서', P, P + 30);
+  ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = F(500, 30); ctx.textAlign = 'right'; ctx.fillText(d.dateText, W - P, P + 30); ctx.textAlign = 'left';
   // 하단
   ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = F(500, 26);
-  ctx.fillText(d.nickname ? `@${d.nickname}` : '', P, H - P + 6);
+  if (d.nickname) ctx.fillText(`@${d.nickname}`, P, H - P + 6);
   ctx.textAlign = 'right'; ctx.fillText('독서기록 · AI각인 독서', W - P, H - P + 6); ctx.textAlign = 'left';
+
+  const coverBox = (x, y, w) => {
+    const h = Math.round(w * 1.45);
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 36; ctx.shadowOffsetY = 14;
+    roundRect(ctx, x, y, w, h, 10); ctx.fillStyle = '#2f4a3e'; ctx.fill(); ctx.restore();
+    if (d.cover) { ctx.save(); roundRect(ctx, x, y, w, h, 10); ctx.clip(); drawCover(ctx, d.cover, x, y, w, h); ctx.restore(); }
+    else { ctx.fillStyle = '#fff'; ctx.font = F(700, Math.round(w / 9)); wrapLines(ctx, mainTitle, w - 30, 6).forEach((l, i) => ctx.fillText(l, x + 16, y + w / 6 + i * (w / 7))); }
+    return h;
+  };
+  // 제목 블록: 반환 높이
+  const titleBlock = (x, y, w, size, align = 'left', measureOnly = false) => {
+    ctx.textAlign = align;
+    const ax = align === 'center' ? x + w / 2 : x;
+    let yy = y;
+    ctx.font = F(800, size);
+    const tl = wrapLines(ctx, mainTitle, w, 2);
+    tl.forEach(l => { yy += size * 1.22; if (!measureOnly) { ctx.fillStyle = '#fff'; ctx.fillText(l, ax, yy); } });
+    if (subTitle) {
+      ctx.font = F(500, Math.round(size * 0.52));
+      const sl = wrapLines(ctx, subTitle, w, 2);
+      yy += 10;
+      sl.forEach(l => { yy += size * 0.52 * 1.4; if (!measureOnly) { ctx.fillStyle = 'rgba(255,255,255,.72)'; ctx.fillText(l, ax, yy); } });
+    }
+    ctx.font = F(500, Math.round(size * 0.56));
+    yy += size * 0.56 * 1.9;
+    if (!measureOnly) { ctx.fillStyle = 'rgba(255,255,255,.62)'; ctx.fillText(wrapLines(ctx, d.author, w, 1)[0] || '', ax, yy); }
+    ctx.textAlign = 'left';
+    return yy - y;
+  };
+  const statBoxes = (y, h = 170) => {
+    const gap = 20, bw = (CW - gap * 2) / 3;
+    stats.forEach(([k, v], i) => {
+      const x = P + i * (bw + gap);
+      roundRect(ctx, x, y, bw, h, 24); ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 28); ctx.fillText(k, x + 30, y + h * 0.36);
+      ctx.fillStyle = '#e9c46a'; ctx.font = F(800, v.length > 9 ? 40 : 50);
+      ctx.fillText(v, x + 30, y + h * 0.78);
+    });
+    return h;
+  };
+  const quoteBox = (y, size, maxLines, measureOnly = false) => {
+    if (!d.quote) return 0;
+    ctx.font = F(600, size);
+    const ls = wrapLines(ctx, `“${d.quote}”`, CW - 90, maxLines);
+    const lh = size * 1.5, qh = ls.length * lh + 70 + (d.quotePage ? 30 : 0);
+    if (measureOnly) return qh;
+    roundRect(ctx, P, y, CW, qh, 26); ctx.fillStyle = 'rgba(233,196,106,.13)'; ctx.fill();
+    ctx.fillStyle = '#e9c46a'; ctx.fillRect(P, y + 26, 6, qh - 52);
+    ctx.fillStyle = '#fff'; ctx.font = F(600, size);
+    ls.forEach((l, i) => ctx.fillText(l, P + 44, y + 40 + size + i * lh));
+    if (d.quotePage) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 26); ctx.textAlign = 'right'; ctx.fillText(`p.${d.quotePage}`, W - P - 36, y + qh - 28); ctx.textAlign = 'left'; }
+    return qh;
+  };
+  const photoBox = (y, h, overlayQuote) => {
+    ctx.save(); roundRect(ctx, P, y, CW, h, 28); ctx.clip();
+    drawCover(ctx, d.photo, P, y, CW, h);
+    if (overlayQuote && d.quote) {
+      const gg = ctx.createLinearGradient(0, y + h * 0.4, 0, y + h);
+      gg.addColorStop(0, 'rgba(0,0,0,0)'); gg.addColorStop(1, 'rgba(0,0,0,.8)');
+      ctx.fillStyle = gg; ctx.fillRect(P, y, CW, h);
+      ctx.fillStyle = '#fff'; ctx.font = F(600, 34);
+      const ls = wrapLines(ctx, `“${d.quote}”`, CW - 80, 3);
+      ls.forEach((l, i) => ctx.fillText(l, P + 40, y + h - 40 - (ls.length - 1 - i) * 48));
+    }
+    ctx.restore();
+  };
+
+  const top = P + 80, bottom = H - P - 50;
+  if (!story && d.photo) {
+    photoBox(top, 480, true);
+    let y = top + 480 + 36;
+    const cw = 150; coverBox(P, y, cw);
+    const tx = P + cw + 36, tw = W - tx - P;
+    titleBlock(tx, y - 10, tw, 40);
+    const sy = y + Math.round(cw * 1.45) - 64;
+    const colW = tw / 3;
+    stats.forEach(([k, v], i) => {
+      ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 24); ctx.fillText(k, tx + i * colW, sy);
+      ctx.fillStyle = '#e9c46a'; ctx.font = F(800, v.length > 9 ? 32 : 40); ctx.fillText(v, tx + i * colW, sy + 48);
+    });
+  } else if (!story) {
+    const cw = 260, ch = Math.round(cw * 1.45);
+    const tx = P + cw + 44, tw = W - tx - P;
+    const qh = quoteBox(0, 34, 3, true);
+    const blockH = ch + 40 + 160 + (qh ? qh + 30 : 0);
+    let y = top + Math.max(0, (bottom - top - blockH) / 2);
+    coverBox(P, y, cw);
+    const th = titleBlock(tx, 0, tw, 52, 'left', true);
+    titleBlock(tx, y + Math.max(0, (ch - th) / 2) - 16, tw, 52);
+    y += ch + 40;
+    statBoxes(y, 160); y += 160 + 30;
+    quoteBox(y, 34, 3);
+  } else if (d.photo) {
+    photoBox(top, 760, false);
+    let y = top + 760 + 50;
+    const cw = 210; coverBox(P, y, cw);
+    const tx = P + cw + 40, tw = W - tx - P;
+    const th = titleBlock(tx, 0, tw, 50, 'left', true);
+    titleBlock(tx, y + Math.max(0, (cw * 1.45 - th) / 2) - 14, tw, 50);
+    y += Math.round(cw * 1.45) + 50;
+    statBoxes(y); y += 170 + 36;
+    quoteBox(y, 38, Math.max(2, Math.floor((bottom - y - 110) / 57)));
+  } else {
+    const cw = 440, ch = Math.round(cw * 1.45);
+    const th = titleBlock(P, 0, CW, 60, 'center', true);
+    const qh = quoteBox(0, 40, 5, true);
+    const blockH = ch + 50 + th + 60 + 170 + (qh ? qh + 40 : 0);
+    let y = top + Math.max(0, (bottom - top - blockH) / 2);
+    coverBox((W - cw) / 2, y, cw);
+    y += ch + 50;
+    titleBlock(P, y - 20, CW, 60, 'center');
+    y += th + 60;
+    statBoxes(y); y += 170 + 40;
+    quoteBox(y, 40, 5);
+  }
 }
 
 /* ---------- 인증 이미지 모달 ---------- */
