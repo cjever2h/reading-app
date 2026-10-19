@@ -1,8 +1,8 @@
-// 오늘의 독서 인증 이미지: 정사각형(피드)·세로형(스토리), 페이지 사진 자르기·가리기 편집, 저장·공유
+// 오늘의 독서 인증 이미지: 정사각형 템플릿 5종(썸네일에서 선택), 오늘의 한 줄, 책 진행률, 페이지 사진 자르기·가리기, 저장·공유
 import * as db from './db.js';
 import { S } from './db.js';
-import { esc, openModal, toast, fmtDur, pad, ymd } from './ui.js';
-import { streak, pagesOf } from './calc.js';
+import { esc, openModal, toast, fmtDur, pad, ymd, addDays } from './ui.js';
+import { streak, pagesOf, sessionDate, bookSeconds } from './calc.js';
 
 const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
@@ -48,143 +48,280 @@ function drawCover(ctx, img, x, y, w, h) {
 
 const F = (w, s) => `${w} ${s}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
 
-/** 인증 이미지 그리기 */
-export async function drawCert(canvas, d) {
-  const story = d.template === 'story';
-  const W = 1080, H = story ? 1920 : 1080;
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  try { await Promise.all([document.fonts.load(F(800, 40)), document.fonts.load(F(600, 30)), document.fonts.load(F(500, 30))]); } catch { /* 기본 글꼴 */ }
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#22382f'); g.addColorStop(1, '#0f1714');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-  const P = 64, CW = W - P * 2;
-  const [mainTitle, ...subParts] = String(d.title).split(/\s*:\s+/);
-  const subTitle = subParts.join(': ');
-  const stats = [['읽은 쪽', d.pagesText], ['독서 시간', d.timeText], ['연속 독서', `${d.streak}일`]];
+/* ---------- 템플릿 5종 (정사각형 1080) ---------- */
+export const CERT_TEMPLATES = [
+  { id: 'classic', name: '다크 그린 클래식' },
+  { id: 'quote', name: '문장 카드' },
+  { id: 'color', name: '책 색 맞춤' },
+  { id: 'stats', name: '기록·통계형' },
+  { id: 'photo', name: '사진 풀화면' },
+];
+const W = 1080, H = 1080, P = 64;
+const GOLD = '#e9c46a';
 
-  // 상단 라벨
-  ctx.fillStyle = '#e9c46a'; ctx.font = F(700, 30); ctx.fillText('오늘의 독서', P, P + 30);
-  ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = F(500, 30); ctx.textAlign = 'right'; ctx.fillText(d.dateText, W - P, P + 30); ctx.textAlign = 'left';
-  // 하단
-  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = F(500, 26);
+/** 표지에서 대표 색 추출 (채도 높은 색 우선) */
+export function coverColor(img) {
+  if (!img) return null;
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 24;
+    const x = c.getContext('2d'); x.drawImage(img, 0, 0, 24, 24);
+    const d = x.getImageData(0, 0, 24, 24).data;
+    let best = null, bestScore = -1, sum = [0, 0, 0];
+    for (let i = 0; i < d.length; i += 4) {
+      const [r, g, b] = [d[i], d[i + 1], d[i + 2]];
+      sum[0] += r; sum[1] += g; sum[2] += b;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), sat = mx ? (mx - mn) / mx : 0, lum = (mx + mn) / 2;
+      const score = sat * (lum > 30 && lum < 230 ? 1 : 0.2);
+      if (score > bestScore) { bestScore = score; best = [r, g, b]; }
+    }
+    const n = d.length / 4;
+    return bestScore > 0.25 ? best : sum.map(v => Math.round(v / n));
+  } catch { return null; }
+}
+const shade = ([r, g, b], f) => `rgb(${Math.round(r * f)},${Math.round(g * f)},${Math.round(b * f)})`;
+
+function setup(canvas) {
+  canvas.width = W; canvas.height = H;
+  return canvas.getContext('2d');
+}
+function footer(ctx, d, color = 'rgba(255,255,255,.55)') {
+  ctx.fillStyle = color; ctx.font = F(500, 26); ctx.textAlign = 'left';
   if (d.nickname) ctx.fillText(`@${d.nickname}`, P, H - P + 6);
   ctx.textAlign = 'right'; ctx.fillText('독서기록 · AI각인 독서', W - P, H - P + 6); ctx.textAlign = 'left';
-
-  const coverBox = (x, y, w) => {
-    const h = Math.round(w * 1.45);
-    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 36; ctx.shadowOffsetY = 14;
-    roundRect(ctx, x, y, w, h, 10); ctx.fillStyle = '#2f4a3e'; ctx.fill(); ctx.restore();
-    if (d.cover) { ctx.save(); roundRect(ctx, x, y, w, h, 10); ctx.clip(); drawCover(ctx, d.cover, x, y, w, h); ctx.restore(); }
-    else { ctx.fillStyle = '#fff'; ctx.font = F(700, Math.round(w / 9)); wrapLines(ctx, mainTitle, w - 30, 6).forEach((l, i) => ctx.fillText(l, x + 16, y + w / 6 + i * (w / 7))); }
-    return h;
-  };
-  // 제목 블록: 반환 높이
-  const titleBlock = (x, y, w, size, align = 'left', measureOnly = false) => {
-    ctx.textAlign = align;
-    const ax = align === 'center' ? x + w / 2 : x;
-    let yy = y;
-    ctx.font = F(800, size);
-    const tl = wrapLines(ctx, mainTitle, w, 2);
-    tl.forEach(l => { yy += size * 1.22; if (!measureOnly) { ctx.fillStyle = '#fff'; ctx.fillText(l, ax, yy); } });
-    if (subTitle) {
-      ctx.font = F(500, Math.round(size * 0.52));
-      const sl = wrapLines(ctx, subTitle, w, 2);
-      yy += 10;
-      sl.forEach(l => { yy += size * 0.52 * 1.4; if (!measureOnly) { ctx.fillStyle = 'rgba(255,255,255,.72)'; ctx.fillText(l, ax, yy); } });
-    }
-    ctx.font = F(500, Math.round(size * 0.56));
-    yy += size * 0.56 * 1.9;
-    if (!measureOnly) { ctx.fillStyle = 'rgba(255,255,255,.62)'; ctx.fillText(wrapLines(ctx, d.author, w, 1)[0] || '', ax, yy); }
-    ctx.textAlign = 'left';
-    return yy - y;
-  };
-  const statBoxes = (y, h = 170) => {
-    const gap = 20, bw = (CW - gap * 2) / 3;
-    stats.forEach(([k, v], i) => {
-      const x = P + i * (bw + gap);
-      roundRect(ctx, x, y, bw, h, 24); ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 28); ctx.fillText(k, x + 30, y + h * 0.36);
-      ctx.fillStyle = '#e9c46a'; ctx.font = F(800, v.length > 9 ? 40 : 50);
-      ctx.fillText(v, x + 30, y + h * 0.78);
-    });
-    return h;
-  };
-  const quoteBox = (y, size, maxLines, measureOnly = false) => {
-    if (!d.quote) return 0;
+}
+function header(ctx, d, label = '오늘의 독서', c1 = GOLD, c2 = 'rgba(255,255,255,.75)') {
+  ctx.fillStyle = c1; ctx.font = F(700, 30); ctx.textAlign = 'left'; ctx.fillText(label, P, P + 30);
+  ctx.fillStyle = c2; ctx.font = F(500, 30); ctx.textAlign = 'right'; ctx.fillText(d.dateText, W - P, P + 30); ctx.textAlign = 'left';
+}
+function coverBox(ctx, d, x, y, w) {
+  const h = Math.round(w * 1.45);
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 34; ctx.shadowOffsetY = 14;
+  roundRect(ctx, x, y, w, h, 10); ctx.fillStyle = '#2f4a3e'; ctx.fill(); ctx.restore();
+  if (d.cover) { ctx.save(); roundRect(ctx, x, y, w, h, 10); ctx.clip(); drawCover(ctx, d.cover, x, y, w, h); ctx.restore(); }
+  else { ctx.fillStyle = '#fff'; ctx.font = F(700, Math.round(w / 9)); wrapLines(ctx, d.mainTitle, w - 30, 6).forEach((l, i) => ctx.fillText(l, x + 16, y + w / 6 + i * (w / 7))); }
+  return h;
+}
+/** 제목·부제·저자. 높이 반환 */
+function titleBlock(ctx, d, x, y, w, size, { align = 'left', color = '#fff', sub = 'rgba(255,255,255,.72)', au = 'rgba(255,255,255,.62)', measure = false, maxLines = 2 } = {}) {
+  ctx.textAlign = align; const ax = align === 'center' ? x + w / 2 : x; let yy = y;
+  ctx.font = F(800, size);
+  wrapLines(ctx, d.mainTitle, w, maxLines).forEach(l => { yy += size * 1.22; if (!measure) { ctx.fillStyle = color; ctx.fillText(l, ax, yy); } });
+  if (d.subTitle) { ctx.font = F(500, Math.round(size * 0.5)); yy += 8; wrapLines(ctx, d.subTitle, w, 1).forEach(l => { yy += size * 0.5 * 1.4; if (!measure) { ctx.fillStyle = sub; ctx.fillText(l, ax, yy); } }); }
+  ctx.font = F(500, Math.round(size * 0.54)); yy += size * 0.54 * 1.8;
+  if (!measure) { ctx.fillStyle = au; ctx.fillText(wrapLines(ctx, d.author, w, 1)[0] || '', ax, yy); }
+  ctx.textAlign = 'left';
+  return yy - y;
+}
+function statBoxes(ctx, d, y, h = 150, { bg = 'rgba(255,255,255,.07)', label = 'rgba(255,255,255,.6)', value = GOLD } = {}) {
+  const gap = 20, CW = W - P * 2, bw = (CW - gap * 2) / 3;
+  d.stats.forEach(([k, v], i) => {
+    const x = P + i * (bw + gap);
+    roundRect(ctx, x, y, bw, h, 22); ctx.fillStyle = bg; ctx.fill();
+    ctx.fillStyle = label; ctx.font = F(500, 26); ctx.fillText(k, x + 28, y + h * 0.37);
+    ctx.fillStyle = value; ctx.font = F(800, v.length > 9 ? 38 : 46); ctx.fillText(v, x + 28, y + h * 0.78);
+  });
+  return h;
+}
+/** 진행률 막대. 높이 반환 */
+function progressBar(ctx, d, x, y, w, { track = 'rgba(255,255,255,.15)', fill = GOLD, text = 'rgba(255,255,255,.75)', size = 24 } = {}) {
+  if (!d.showProgress || d.progress == null) return 0;
+  ctx.fillStyle = text; ctx.font = F(600, size); ctx.textAlign = 'left';
+  ctx.fillText(`책 진행률 ${d.progress}%`, x, y + size);
+  ctx.textAlign = 'right'; ctx.font = F(500, size); ctx.fillText(d.progressText, x + w, y + size); ctx.textAlign = 'left';
+  const by = y + size + 14;
+  roundRect(ctx, x, by, w, 14, 7); ctx.fillStyle = track; ctx.fill();
+  if (d.progress > 0) { roundRect(ctx, x, by, Math.max(14, w * d.progress / 100), 14, 7); ctx.fillStyle = fill; ctx.fill(); }
+  return size + 14 + 14;
+}
+/** 문장(따옴표)과 나의 한 줄. 높이 반환 */
+function wordsBlock(ctx, d, x, y, w, { size = 34, color = '#fff', mine = 'rgba(255,255,255,.8)', mark = GOLD, maxLines = 3, measure = false } = {}) {
+  let yy = y;
+  if (d.quote) {
     ctx.font = F(600, size);
-    const ls = wrapLines(ctx, `“${d.quote}”`, CW - 90, maxLines);
-    const lh = size * 1.5, qh = ls.length * lh + 70 + (d.quotePage ? 30 : 0);
-    if (measureOnly) return qh;
-    roundRect(ctx, P, y, CW, qh, 26); ctx.fillStyle = 'rgba(233,196,106,.13)'; ctx.fill();
-    ctx.fillStyle = '#e9c46a'; ctx.fillRect(P, y + 26, 6, qh - 52);
-    ctx.fillStyle = '#fff'; ctx.font = F(600, size);
-    ls.forEach((l, i) => ctx.fillText(l, P + 44, y + 40 + size + i * lh));
-    if (d.quotePage) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 26); ctx.textAlign = 'right'; ctx.fillText(`p.${d.quotePage}`, W - P - 36, y + qh - 28); ctx.textAlign = 'left'; }
-    return qh;
-  };
-  const photoBox = (y, h, overlayQuote) => {
-    ctx.save(); roundRect(ctx, P, y, CW, h, 28); ctx.clip();
-    drawCover(ctx, d.photo, P, y, CW, h);
-    if (overlayQuote && d.quote) {
-      const gg = ctx.createLinearGradient(0, y + h * 0.4, 0, y + h);
-      gg.addColorStop(0, 'rgba(0,0,0,0)'); gg.addColorStop(1, 'rgba(0,0,0,.8)');
-      ctx.fillStyle = gg; ctx.fillRect(P, y, CW, h);
-      ctx.fillStyle = '#fff'; ctx.font = F(600, 34);
-      const ls = wrapLines(ctx, `“${d.quote}”`, CW - 80, 3);
-      ls.forEach((l, i) => ctx.fillText(l, P + 40, y + h - 40 - (ls.length - 1 - i) * 48));
-    }
-    ctx.restore();
-  };
-
-  const top = P + 80, bottom = H - P - 50;
-  if (!story && d.photo) {
-    photoBox(top, 460, true);
-    let y = top + 460 + 36;
-    const cw = 150; coverBox(P, y, cw);
-    const tx = P + cw + 36, tw = W - tx - P;
-    const th = titleBlock(tx, y - 10, tw, 40);
-    const sy = Math.max(y - 10 + th + 56, y + Math.round(cw * 1.45) - 56);
-    const colW = tw / 3;
-    stats.forEach(([k, v], i) => {
-      ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 24); ctx.fillText(k, tx + i * colW, sy);
-      ctx.fillStyle = '#e9c46a'; ctx.font = F(800, v.length > 9 ? 32 : 40); ctx.fillText(v, tx + i * colW, sy + 48);
-    });
-  } else if (!story) {
-    const cw = 260, ch = Math.round(cw * 1.45);
-    const tx = P + cw + 44, tw = W - tx - P;
-    const qh = quoteBox(0, 34, 3, true);
-    const blockH = ch + 40 + 160 + (qh ? qh + 30 : 0);
-    let y = top + Math.max(0, (bottom - top - blockH) / 2);
-    coverBox(P, y, cw);
-    const th = titleBlock(tx, 0, tw, 52, 'left', true);
-    titleBlock(tx, y + Math.max(0, (ch - th) / 2) - 16, tw, 52);
-    y += ch + 40;
-    statBoxes(y, 160); y += 160 + 30;
-    quoteBox(y, 34, 3);
-  } else if (d.photo) {
-    photoBox(top, 760, false);
-    let y = top + 760 + 50;
-    const cw = 210; coverBox(P, y, cw);
-    const tx = P + cw + 40, tw = W - tx - P;
-    const th = titleBlock(tx, 0, tw, 50, 'left', true);
-    titleBlock(tx, y + Math.max(0, (cw * 1.45 - th) / 2) - 14, tw, 50);
-    y += Math.round(cw * 1.45) + 50;
-    statBoxes(y); y += 170 + 36;
-    quoteBox(y, 38, Math.max(2, Math.floor((bottom - y - 110) / 57)));
-  } else {
-    const cw = 440, ch = Math.round(cw * 1.45);
-    const th = titleBlock(P, 0, CW, 60, 'center', true);
-    const qh = quoteBox(0, 40, 5, true);
-    const blockH = ch + 50 + th + 60 + 170 + (qh ? qh + 40 : 0);
-    let y = top + Math.max(0, (bottom - top - blockH) / 2);
-    coverBox((W - cw) / 2, y, cw);
-    y += ch + 50;
-    titleBlock(P, y - 20, CW, 60, 'center');
-    y += th + 60;
-    statBoxes(y); y += 170 + 40;
-    quoteBox(y, 40, 5);
+    const ls = wrapLines(ctx, `“${d.quote}”`, w, maxLines);
+    ls.forEach(l => { yy += size * 1.45; if (!measure) { ctx.fillStyle = color; ctx.fillText(l, x, yy); } });
+    if (d.quotePage) { yy += 34; if (!measure) { ctx.fillStyle = 'rgba(255,255,255,.55)'; if (color !== '#fff') ctx.fillStyle = mine; ctx.font = F(500, 24); ctx.fillText(`p.${d.quotePage}`, x, yy); } }
   }
+  if (d.oneLine) {
+    yy += d.quote ? 22 : 0;
+    ctx.font = F(600, Math.round(size * 0.78));
+    const ls = wrapLines(ctx, d.oneLine, w - 150, 2);
+    ls.forEach((l, i) => {
+      yy += size * 0.78 * 1.5;
+      if (!measure) {
+        if (i === 0) { ctx.fillStyle = mark; ctx.font = F(700, Math.round(size * 0.62)); ctx.fillText('나의 한 줄', x, yy); ctx.font = F(600, Math.round(size * 0.78)); }
+        ctx.fillStyle = mine; ctx.fillText(l, x + 150, yy);
+      }
+    });
+  }
+  return yy - y;
+}
+
+const DRAW = {
+  /* 1. 다크 그린 클래식 */
+  classic(ctx, d) {
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#22382f'); g.addColorStop(1, '#0f1714');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    header(ctx, d); footer(ctx, d);
+    const top = P + 80;
+    if (d.photo) {
+      const ph = 400;
+      ctx.save(); roundRect(ctx, P, top, W - P * 2, ph, 26); ctx.clip(); drawCover(ctx, d.photo, P, top, W - P * 2, ph); ctx.restore();
+      let y = top + ph + 34;
+      const cw = 140; coverBox(ctx, d, P, y, cw);
+      const tx = P + cw + 34, tw = W - tx - P;
+      const th = titleBlock(ctx, d, tx, y - 12, tw, 38, { maxLines: 1 });
+      let sy = y - 12 + th + 30;
+      const colW = tw / 3;
+      d.stats.forEach(([k, v], i) => {
+        ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 22); ctx.fillText(k, tx + i * colW, sy);
+        ctx.fillStyle = GOLD; ctx.font = F(800, v.length > 9 ? 30 : 36); ctx.fillText(v, tx + i * colW, sy + 42);
+      });
+      y = Math.max(y + Math.round(cw * 1.45), sy + 60) + 26;
+      y += progressBar(ctx, d, P, y, W - P * 2, { size: 22 }) + 20;
+      wordsBlock(ctx, d, P, y - 10, W - P * 2, { size: 28, maxLines: 1 });
+    } else {
+      const cw = 250, ch = Math.round(cw * 1.45);
+      const tx = P + cw + 44, tw = W - tx - P;
+      let y = top + 10;
+      coverBox(ctx, d, P, y, cw);
+      const th = titleBlock(ctx, d, tx, 0, tw, 50, { measure: true });
+      titleBlock(ctx, d, tx, y + Math.max(0, (ch - th) / 2) - 40, tw, 50);
+      if (d.showProgress && d.progress != null) progressBar(ctx, d, tx, y + ch - 52, tw, { size: 22 });
+      y += ch + 36;
+      statBoxes(ctx, d, y, 140); y += 140 + 26;
+      wordsBlock(ctx, d, P, y - 10, W - P * 2, { size: 30, maxLines: 2 });
+    }
+  },
+
+  /* 2. 문장 카드: 문장을 크게 */
+  quote(ctx, d) {
+    ctx.fillStyle = '#f5efe3'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(120,90,40,.06)'; for (let i = 0; i < 40; i++) ctx.fillRect(0, 150 + i * 46, W, 1);
+    header(ctx, d, '오늘의 문장', '#9a6b1f', 'rgba(40,40,40,.6)'); footer(ctx, d, 'rgba(40,40,40,.5)');
+    const main = d.quote || d.oneLine || d.mainTitle;
+    const isQuote = !!d.quote;
+    ctx.fillStyle = '#c9962e'; ctx.font = F(800, 160); ctx.fillText('“', P - 6, 300);
+    let size = 54; ctx.font = F(700, size);
+    let ls = wrapLines(ctx, main, W - P * 2 - 20, 6);
+    if (ls.length > 4) { size = 44; ctx.font = F(700, size); ls = wrapLines(ctx, main, W - P * 2 - 20, 7); }
+    const blockH = ls.length * size * 1.5;
+    let y = Math.max(300, 300 + (420 - blockH) / 2);
+    ctx.fillStyle = '#1f2a24';
+    ls.forEach((l, i) => ctx.fillText(l, P + 10, y + i * size * 1.5));
+    y += blockH;
+    if (isQuote && d.quotePage) { ctx.fillStyle = 'rgba(40,40,40,.55)'; ctx.font = F(500, 26); ctx.fillText(`p.${d.quotePage}`, P + 10, y + 6); y += 40; }
+    if (isQuote && d.oneLine) {
+      ctx.font = F(600, 28); const ol = wrapLines(ctx, d.oneLine, W - P * 2 - 170, 2);
+      ctx.fillStyle = '#9a6b1f'; ctx.font = F(700, 24); ctx.fillText('나의 한 줄', P + 10, y + 34);
+      ctx.fillStyle = '#3b4440'; ctx.font = F(600, 28); ol.forEach((l, i) => ctx.fillText(l, P + 170, y + 34 + i * 40));
+    }
+    // 하단 책 정보
+    const by = H - P - 210;
+    ctx.fillStyle = 'rgba(40,40,40,.15)'; ctx.fillRect(P, by - 24, W - P * 2, 2);
+    const cw = 110; coverBox(ctx, d, P, by, cw);
+    const tx = P + cw + 30;
+    ctx.fillStyle = '#1f2a24'; ctx.font = F(800, 36); ctx.fillText(wrapLines(ctx, d.mainTitle, W - tx - P, 1)[0], tx, by + 42);
+    ctx.fillStyle = 'rgba(40,40,40,.6)'; ctx.font = F(500, 26); ctx.fillText(wrapLines(ctx, d.author, W - tx - P, 1)[0] || '', tx, by + 82);
+    ctx.fillStyle = '#9a6b1f'; ctx.font = F(700, 28); ctx.fillText(d.stats.map(s => s[1]).join('  ·  '), tx, by + 126);
+    if (d.showProgress && d.progress != null) progressBar(ctx, d, tx, by + 130, W - tx - P, { track: 'rgba(40,40,40,.12)', fill: '#c9962e', text: 'rgba(40,40,40,.65)', size: 20 });
+  },
+
+  /* 3. 책 색 맞춤 */
+  color(ctx, d) {
+    const base = d.color || [36, 69, 58];
+    const lum = (0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2]);
+    const dark = lum > 150 ? 0.42 : lum > 90 ? 0.62 : 0.85;
+    const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, shade(base, dark * 1.15)); g.addColorStop(1, shade(base, dark * 0.55));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.beginPath(); ctx.arc(W - 120, 220, 330, 0, Math.PI * 2); ctx.fill();
+    header(ctx, d, '오늘의 독서', '#fff', 'rgba(255,255,255,.8)'); footer(ctx, d, 'rgba(255,255,255,.7)');
+    const cw = 330, ch = Math.round(cw * 1.45);
+    const cx = P, cy = P + 96;
+    coverBox(ctx, d, cx, cy, cw);
+    const tx = cx + cw + 46, tw = W - tx - P;
+    let y = cy + 6;
+    y += titleBlock(ctx, d, tx, y, tw, 48, { maxLines: 3, sub: 'rgba(255,255,255,.82)', au: 'rgba(255,255,255,.75)' }) + 40;
+    d.stats.forEach(([k, v]) => {
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = F(500, 24); ctx.fillText(k, tx, y);
+      ctx.fillStyle = '#fff'; ctx.font = F(800, 40); ctx.fillText(v, tx + 150, y + 4);
+      y += 58;
+    });
+    let y2 = cy + ch + 40;
+    y2 += progressBar(ctx, d, P, y2, W - P * 2, { track: 'rgba(255,255,255,.22)', fill: '#fff', text: 'rgba(255,255,255,.85)', size: 22 });
+    wordsBlock(ctx, d, P, y2 + (d.showProgress && d.progress != null ? 6 : -20), W - P * 2, { size: 30, maxLines: 2, mark: '#fff', mine: 'rgba(255,255,255,.88)' });
+  },
+
+  /* 4. 기록·통계형 */
+  stats(ctx, d) {
+    ctx.fillStyle = '#111418'; ctx.fillRect(0, 0, W, H);
+    header(ctx, d, 'READING LOG', '#5ee08b', 'rgba(255,255,255,.7)'); footer(ctx, d, 'rgba(255,255,255,.45)');
+    // 책 한 줄
+    const cw = 90; coverBox(ctx, d, P, P + 84, cw);
+    ctx.fillStyle = '#fff'; ctx.font = F(800, 34); ctx.fillText(wrapLines(ctx, d.mainTitle, W - P * 2 - cw - 30, 1)[0], P + cw + 28, P + 84 + 46);
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 24); ctx.fillText(wrapLines(ctx, d.author, W - P * 2 - cw - 30, 1)[0] || '', P + cw + 28, P + 84 + 86);
+    // 큰 숫자: 독서 시간
+    let y = P + 84 + 130 + 70;
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = F(600, 26); ctx.fillText('오늘 독서 시간', P, y);
+    ctx.fillStyle = '#fff'; ctx.font = F(900, 150); ctx.fillText(d.timeBig, P - 6, y + 150);
+    // 보조 숫자
+    const sx = 620;
+    [['읽은 쪽', d.pagesText], ['연속 독서', `${d.streak}일`], ['이 책 누적', d.bookTotalText]].forEach(([k, v], i) => {
+      ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = F(600, 24); ctx.fillText(k, sx, y + i * 62);
+      ctx.fillStyle = '#5ee08b'; ctx.font = F(800, 34); ctx.textAlign = 'right'; ctx.fillText(v, W - P, y + i * 62); ctx.textAlign = 'left';
+    });
+    y += 210;
+    // 최근 7일 막대
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = F(600, 24); ctx.fillText('최근 7일', P, y);
+    const maxS = Math.max(1, ...d.week.map(x => x.sec));
+    const bw = (W - P * 2 - 6 * 18) / 7, bh = 120, by = y + 24;
+    d.week.forEach((x, i) => {
+      const bx = P + i * (bw + 18);
+      roundRect(ctx, bx, by, bw, bh, 10); ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fill();
+      const hh = x.sec ? Math.max(10, bh * x.sec / maxS) : 0;
+      if (hh) { roundRect(ctx, bx, by + bh - hh, bw, hh, 10); ctx.fillStyle = x.today ? '#5ee08b' : 'rgba(94,224,139,.45)'; ctx.fill(); }
+      ctx.fillStyle = x.today ? '#fff' : 'rgba(255,255,255,.5)'; ctx.font = F(600, 22); ctx.textAlign = 'center'; ctx.fillText(x.label, bx + bw / 2, by + bh + 32); ctx.textAlign = 'left';
+    });
+    y = by + bh + 60;
+    y += progressBar(ctx, d, P, y, W - P * 2, { track: 'rgba(255,255,255,.1)', fill: '#5ee08b', size: 22 }) + 18;
+    wordsBlock(ctx, d, P, y - 18, W - P * 2, { size: 26, maxLines: 1, mark: '#5ee08b' });
+  },
+
+  /* 5. 사진 풀화면 */
+  photo(ctx, d) {
+    if (d.photo) drawCover(ctx, d.photo, 0, 0, W, H);
+    else if (d.cover) { ctx.filter = 'blur(28px) brightness(.8)'; drawCover(ctx, d.cover, -60, -60, W + 120, H + 120); ctx.filter = 'none'; }
+    else { ctx.fillStyle = '#22382f'; ctx.fillRect(0, 0, W, H); }
+    const gt = ctx.createLinearGradient(0, 0, 0, 260); gt.addColorStop(0, 'rgba(0,0,0,.6)'); gt.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gt; ctx.fillRect(0, 0, W, 260);
+    const gb = ctx.createLinearGradient(0, H * 0.35, 0, H); gb.addColorStop(0, 'rgba(0,0,0,0)'); gb.addColorStop(1, 'rgba(0,0,0,.88)'); ctx.fillStyle = gb; ctx.fillRect(0, H * 0.35, W, H * 0.65);
+    header(ctx, d, '오늘의 독서', GOLD, 'rgba(255,255,255,.9)'); footer(ctx, d, 'rgba(255,255,255,.7)');
+    if (!d.photo && d.cover) coverBox(ctx, d, (W - 260) / 2, 150, 260);
+    // 아래에서 위로 쌓기
+    let y = H - P - 60;
+    const wh = wordsBlock(ctx, d, P, 0, W - P * 2, { size: 32, maxLines: 2, measure: true });
+    const ph = d.showProgress && d.progress != null ? 52 : 0;
+    const statY = y - ph - (wh ? wh + 26 : 0) - 64;
+    const titleH = titleBlock(ctx, d, P, 0, W - P * 2, 52, { measure: true, maxLines: 1 });
+    titleBlock(ctx, d, P, statY - titleH - 40, W - P * 2, 52, { maxLines: 1 });
+    ctx.font = F(800, 40); let sx = P;
+    d.stats.forEach(([k, v], i) => {
+      ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.font = F(500, 24); ctx.fillText(k, sx, statY);
+      ctx.fillStyle = GOLD; ctx.font = F(800, 40); ctx.fillText(v, sx, statY + 48);
+      sx += Math.max(220, ctx.measureText(v).width + 70);
+    });
+    let yy = statY + 80;
+    if (wh) { wordsBlock(ctx, d, P, yy - 40, W - P * 2, { size: 32, maxLines: 2 }); yy += wh - 10; }
+    if (ph) progressBar(ctx, d, P, yy + 6, W - P * 2, { size: 22, track: 'rgba(255,255,255,.25)' });
+  },
+};
+
+/** 인증 이미지 그리기 */
+export async function drawCert(canvas, d) {
+  const ctx = setup(canvas);
+  try { await Promise.all([document.fonts.load(F(800, 40)), document.fonts.load(F(600, 30)), document.fonts.load(F(500, 30)), document.fonts.load(F(900, 60))]); } catch { /* 기본 글꼴 */ }
+  const [mainTitle, ...subParts] = String(d.title).split(/\s*:\s+/);
+  const dd = { ...d, mainTitle, subTitle: subParts.join(': '), stats: [['읽은 쪽', d.pagesText], ['독서 시간', d.timeText], ['연속 독서', `${d.streak}일`]] };
+  (DRAW[d.template] || DRAW.classic)(ctx, dd);
 }
 
 /* ---------- 인증 이미지 모달 ---------- */
@@ -192,14 +329,17 @@ export async function certModal(session, { afterClose, justFinished = false } = 
   const b = db.book(session.book_id);
   const st = S.settings;
   const quotes = [...S.quotes.filter(q => q.session_id === session.id), ...S.quotes.filter(q => q.book_id === b.id && q.session_id !== session.id).reverse()];
-  const state = { template: 'square', photo: null, photoCanvas: null, photoDirty: false, quoteId: '', showNick: st.show_nickname !== false };
+  const savedTpl = (st.data || {}).cert_template || localStorage.getItem('ra-cert-tpl') || 'classic';
+  const state = { template: CERT_TEMPLATES.some(t => t.id === savedTpl) ? savedTpl : 'classic', photoCanvas: null, photoDirty: false, quoteId: '', showNick: st.show_nickname !== false, showProgress: true, oneLine: session.memo || '' };
 
   const m = openModal(`
     <h3>${justFinished ? '완독 기록' : '오늘의 독서 인증'}</h3>
+    <div class="tpl-strip" data-tpls>${CERT_TEMPLATES.map(t => `<button class="tpl ${t.id === state.template ? 'on' : ''}" data-tpl="${t.id}"><canvas width="216" height="216"></canvas><span>${t.name}</span></button>`).join('')}</div>
     <div class="cert-wrap">
       <div class="cert-preview"><canvas data-cv></canvas></div>
       <div class="cert-ctrl form">
-        <div class="seg" data-tpl><label><input type="radio" name="tpl" value="square" checked><span>정사각형 (피드)</span></label><label><input type="radio" name="tpl" value="story"><span>세로형 (스토리)</span></label></div>
+        <label>오늘의 한 줄 <span class="muted small">(이미지에 '나의 한 줄'로 표시)</span><input data-one maxlength="60" placeholder="예: 편리함이 구속이 될 수 있다는 걸 알았다" value="${esc(state.oneLine)}"></label>
+        <label>문장 1개 (선택)<select data-quote><option value="">선택 안 함</option>${quotes.map(q => `<option value="${q.id}">${esc(q.body.slice(0, 40))}${q.body.length > 40 ? '…' : ''}</option>`).join('')}</select></label>
         <div class="field-label">책 페이지 사진</div>
         <div class="row gap wrap">
           <label class="btn small file-btn">촬영<input type="file" accept="image/*" capture="environment" hidden data-photo></label>
@@ -207,46 +347,75 @@ export async function certModal(session, { afterClose, justFinished = false } = 
           <button class="btn small" data-edit disabled>자르기·가리기</button>
           <button class="btn small ghost" data-nophoto disabled>사진 빼기</button>
         </div>
-        <label>문장 1개 (선택)<select data-quote><option value="">선택 안 함</option>${quotes.map(q => `<option value="${q.id}">${esc(q.body.slice(0, 40))}${q.body.length > 40 ? '…' : ''}</option>`).join('')}</select></label>
+        <label class="check"><input type="checkbox" data-prog checked> 책 진행률 표시</label>
         <label class="check"><input type="checkbox" data-nick ${state.showNick ? 'checked' : ''}> 닉네임 표기 (@${esc(st.nickname || '')})</label>
         <div class="row gap wrap mt">
           <button class="btn primary" data-share>공유</button>
           <button class="btn" data-save>이미지 저장</button>
         </div>
-        <p class="muted small" data-msg>사진은 공유 전에 자르기·가리기로 보이고 싶은 부분만 남겨요.</p>
+        <p class="muted small" data-msg>템플릿은 위에서 골라요. 고른 템플릿은 다음에도 기본으로 열려요.</p>
       </div>
-    </div>`, { wide: true, onClose: () => { if (state.photoDirty && state.photoCanvas) savePhoto(); afterClose && afterClose(); } });
+    </div>`, { wide: true, onClose: () => { finish(); afterClose && afterClose(); } });
 
   const cv = m.el.querySelector('[data-cv]');
   const msg = m.el.querySelector('[data-msg]');
   const coverUrl = b.cover_url ? await db.proxiedImage(b.cover_url) : null;
   const cover = coverUrl ? await loadImg(coverUrl).catch(() => null) : null;
-
   if (session.photo_path) {
     const u = await db.photoUrl(session.photo_path);
-    if (u) { try { const blob = await (await fetch(u)).blob(); const c = await fileToCanvas(blob); state.photoCanvas = c; } catch { /* ignore */ } }
+    if (u) { try { state.photoCanvas = await fileToCanvas(await (await fetch(u)).blob()); } catch { /* ignore */ } }
   }
 
   const d0 = new Date(session.started_at);
+  const day0 = ymd(d0);
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const day = addDays(day0, i - 6);
+    const sec = S.sessions.filter(s => s.ended_at && sessionDate(s) === day).reduce((a, s) => a + (s.seconds || 0), 0);
+    return { label: '일월화수목금토'[new Date(day + 'T00:00:00').getDay()], sec, today: i === 6 };
+  });
+  const endPage = Math.max(session.end_page || 0, b.current_page || 0);
+  const prog = b.pages ? Math.min(100, Math.round(endPage / b.pages * 100)) : null;
+  const tsec = session.seconds || 0;
   const base = {
     title: b.title, author: b.author || '',
     dateText: `${d0.getFullYear()}.${pad(d0.getMonth() + 1)}.${pad(d0.getDate())} ${'일월화수목금토'[d0.getDay()]}요일`,
     pagesText: session.start_page != null && session.end_page ? `p.${session.start_page}–${session.end_page}` : `${pagesOf(session)}쪽`,
-    timeText: fmtDur(session.seconds),
-    streak: streak(ymd(d0)) || 1,
-    cover,
+    timeText: fmtDur(tsec), timeBig: tsec >= 3600 ? `${Math.floor(tsec / 3600)}h ${Math.floor(tsec / 60) % 60}m` : `${Math.max(1, Math.round(tsec / 60))}분`,
+    streak: streak(day0) || 1, cover, color: coverColor(cover), week,
+    progress: prog, progressText: b.pages ? `${endPage} / ${b.pages}쪽` : '',
+    bookTotalText: fmtDur(bookSeconds(b.id)),
   };
-  const redraw = async () => {
+  const data = () => {
     const q = quotes.find(x => x.id === state.quoteId);
-    await drawCert(cv, { ...base, template: state.template, photo: state.photoCanvas, quote: q?.body?.slice(0, 160), quotePage: q?.page, nickname: state.showNick ? (st.nickname || '') : '' });
+    return { ...base, photo: state.photoCanvas, quote: q?.body?.slice(0, 160), quotePage: q?.page, nickname: state.showNick ? (st.nickname || '') : '', oneLine: state.oneLine.trim(), showProgress: state.showProgress };
+  };
+  const big = document.createElement('canvas');
+  const drawThumbs = async () => {
+    const dd = data();
+    for (const btn of m.el.querySelectorAll('[data-tpl]')) {
+      await drawCert(big, { ...dd, template: btn.dataset.tpl });
+      const tc = btn.querySelector('canvas'); tc.getContext('2d').drawImage(big, 0, 0, tc.width, tc.height);
+    }
+  };
+  let thumbTimer = null;
+  const redraw = async (thumbs = true) => {
+    await drawCert(cv, { ...data(), template: state.template });
     m.el.querySelector('[data-edit]').disabled = !state.photoCanvas;
     m.el.querySelector('[data-nophoto]').disabled = !state.photoCanvas;
+    if (thumbs) { clearTimeout(thumbTimer); thumbTimer = setTimeout(drawThumbs, 250); }
   };
   await redraw();
 
-  m.el.querySelectorAll('[name=tpl]').forEach(r => r.onchange = () => { state.template = r.value; redraw(); });
+  m.el.querySelectorAll('[data-tpl]').forEach(btn => btn.onclick = () => {
+    state.template = btn.dataset.tpl;
+    m.el.querySelectorAll('[data-tpl]').forEach(x => x.classList.toggle('on', x === btn));
+    localStorage.setItem('ra-cert-tpl', state.template);
+    redraw(false);
+  });
+  m.el.querySelector('[data-one]').oninput = e => { state.oneLine = e.target.value; redraw(); };
   m.el.querySelector('[data-quote]').onchange = e => { state.quoteId = e.target.value; redraw(); };
   m.el.querySelector('[data-nick]').onchange = e => { state.showNick = e.target.checked; redraw(); };
+  m.el.querySelector('[data-prog]').onchange = e => { state.showProgress = e.target.checked; redraw(); };
   m.el.querySelectorAll('[data-photo]').forEach(inp => inp.onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     state.photoCanvas = await fileToCanvas(f); state.photoDirty = true;
@@ -274,14 +443,19 @@ export async function certModal(session, { afterClose, justFinished = false } = 
     }
   };
 
-  async function savePhoto() {
+  async function finish() {
+    // 고른 템플릿을 계정에 기억, 오늘의 한 줄은 세션 메모로 저장, 새 사진은 업로드
+    try { if ((S.settings.data || {}).cert_template !== state.template) await db.saveSettings({ data: { ...(S.settings.data || {}), cert_template: state.template } }); } catch { /* ignore */ }
+    const patch = {};
+    if (state.oneLine.trim() !== (session.memo || '')) patch.memo = state.oneLine.trim();
     try {
-      const blob = await new Promise(res => state.photoCanvas.toBlob(res, 'image/jpeg', 0.85));
-      const path = await db.uploadPhoto(blob, 'page.jpg');
-      const old = session.photo_path;
-      await db.save('sessions', { ...session, photo_path: path });
-      if (old) db.removePhoto(old);
-    } catch (e) { console.warn('사진 업로드 실패', e); }
+      if (state.photoDirty && state.photoCanvas) {
+        const blob = await new Promise(res => state.photoCanvas.toBlob(res, 'image/jpeg', 0.85));
+        patch.photo_path = await db.uploadPhoto(blob, 'page.jpg');
+        if (session.photo_path) db.removePhoto(session.photo_path);
+      }
+      if (Object.keys(patch).length) { const cur = S.sessions.find(s => s.id === session.id) || session; await db.save('sessions', { ...cur, ...patch }); }
+    } catch (e) { console.warn('인증 정보 저장 실패', e); }
   }
 }
 
