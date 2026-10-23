@@ -5,7 +5,10 @@
   --font: Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 * { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { max-width: 100%; overflow-x: hidden; }
+@supports (overflow-x: clip) { html, body { overflow-x: clip; } }
+img, canvas, video { max-width: 100%; }
 body { margin: 0; font-family: var(--font); background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.55; }
 body.no-scroll { overflow: hidden; }
 a { color: inherit; text-decoration: none; }
@@ -51,7 +54,7 @@ input, select, textarea { font: inherit; color: inherit; border: 1px solid var(-
 input[type=checkbox], input[type=radio] { width: auto; }
 textarea { resize: vertical; line-height: 1.5; }
 input:focus, select:focus, textarea:focus { outline: 2px solid rgba(36,69,58,.25); border-color: var(--pri); }
-select { width: auto; }
+select { width: auto; max-width: 100%; text-overflow: ellipsis; }
 .form label { display: flex; flex-direction: column; gap: .25rem; font-size: .86rem; color: var(--muted); font-weight: 500; margin-bottom: .6rem; }
 .form label > input, .form label > textarea, .form label > select { color: var(--ink); font-size: .95rem; }
 .form label.check, label.check { flex-direction: row; align-items: center; gap: .4rem; color: var(--ink); }
@@ -75,7 +78,13 @@ fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 .6rem
 .user-email { white-space: nowrap; }
 main#view { max-width: 1080px; margin: 0 auto; padding: 1rem 1.1rem 6rem; }
 .bottom-nav { display: none; }
+label.mb { display: flex; flex-direction: column; gap: .25rem; max-width: 100%; }
+label.mb select { width: 100%; }
+.reading-card, .book-head, .guide-head, .result, .review-item { min-width: 0; }
+.reading-card > .grow, .book-head > .grow { overflow-wrap: anywhere; }
 @media (max-width: 760px) {
+  /* 아이폰: 16px 미만 입력칸을 누르면 화면이 확대돼 좌우로 밀림 → 16px로 */
+  input, select, textarea, .form label > input, .form label > textarea, .form label > select, .filters select { font-size: 16px; }
   .top-nav, .user-email { display: none; }
   .topbar { padding: .5rem 1rem; padding-top: calc(.5rem + env(safe-area-inset-top)); }
   main#view { padding: .8rem .85rem calc(5.5rem + env(safe-area-inset-bottom)); }
@@ -106,8 +115,8 @@ section { margin-bottom: 1.2rem; }
 .stars { color: var(--acc); letter-spacing: 1px; }
 .kv { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; font-size: .88rem; color: var(--muted); }
 .kv b { color: var(--ink); }
-.tabs { display: flex; gap: .25rem; margin-bottom: .8rem; border-bottom: 1px solid var(--line); }
-.tabs.scroll { overflow-x: auto; scrollbar-width: none; }
+.tabs { display: flex; gap: .25rem; margin-bottom: .8rem; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+.tabs::-webkit-scrollbar { display: none; }
 .tabs > * { appearance: none; background: none; border: none; font: inherit; padding: .55rem .8rem; color: var(--muted); font-weight: 600; cursor: pointer; border-bottom: 2.5px solid transparent; white-space: nowrap; }
 .tabs > .on { color: var(--ink); border-bottom-color: var(--pri); }
 .tabs.small { border: none; margin: 0; background: #efebe0; border-radius: 9px; padding: 2px; }
@@ -138,13 +147,13 @@ section { margin-bottom: 1.2rem; }
 .big { font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; }
 .big small { font-size: .9rem; font-weight: 600; opacity: .8; }
 .review-item { display: flex; align-items: center; gap: .7rem; margin: 0; }
-.reading-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .7rem; }
+.reading-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: .7rem; }
 .reading-card { display: flex; gap: .9rem; margin: 0; }
 .daily-cta { display: flex; align-items: center; gap: .8rem; background: var(--acc-soft); box-shadow: none; }
 .daily-cta.done { background: #eef4ef; }
 
 /* 서재 */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 1.1rem .9rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(124px, 42%), 1fr)); gap: 1.1rem .9rem; }
 .book-tile { display: flex; flex-direction: column; gap: .2rem; }
 .book-tile .t { font-size: .9rem; line-height: 1.3; margin-top: .35rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .book-tile .chip { align-self: flex-start; font-size: .7rem; }
@@ -174,7 +183,7 @@ section { margin-bottom: 1.2rem; }
 .note-body { font-size: .9rem; margin-top: .3rem; color: #3b4440; }
 .kq { border: 1px dashed var(--line); border-radius: 10px; padding: .55rem; margin-bottom: .5rem; display: flex; flex-direction: column; gap: .4rem; }
 .review-row { padding: .45rem 0; border-bottom: 1px solid var(--line); }
-.mode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .6rem; }
+.mode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: .6rem; }
 .mode-card { display: flex; flex-direction: column; gap: .25rem; text-align: left; cursor: pointer; font: inherit; color: inherit; margin: 0; border: 1px solid var(--line); }
 .mode-card:hover { border-color: var(--pri); }
 .exp-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; margin-top: .6rem; }
@@ -231,7 +240,7 @@ section { margin-bottom: 1.2rem; }
 .composer { position: sticky; bottom: 4.6rem; background: var(--bg); padding: .5rem 0; display: flex; flex-direction: column; gap: .45rem; }
 @media (min-width: 761px) { .composer { bottom: 0; } }
 .done-box { background: #eef4ef; }
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .5rem; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: .5rem; }
 .qcard { text-align: left; font: inherit; color: inherit; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: .7rem .8rem; cursor: pointer; display: flex; flex-direction: column; gap: .2rem; }
 .qcard:hover { border-color: var(--acc); background: #fffdf6; }
 details.mini { border: 1px solid var(--line); border-radius: 9px; padding: .4rem .6rem; margin-bottom: .4rem; }
@@ -239,7 +248,7 @@ details.mini summary { cursor: pointer; font-size: .9rem; }
 details.card summary { cursor: pointer; }
 
 /* 통계 */
-.stat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .7rem; margin-bottom: .8rem; }
+.stat-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: .7rem; margin-bottom: .8rem; }
 .stat-cards .card { margin: 0; display: flex; flex-direction: column; }
 .chart { display: flex; flex-direction: column; }
 .bars { width: 100%; flex: 1; }
