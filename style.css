@@ -86,6 +86,8 @@ label.mb select { width: 100%; }
   /* 아이폰: 16px 미만 입력칸을 누르면 화면이 확대돼 좌우로 밀림 → 16px로 */
   input, select, textarea, .form label > input, .form label > textarea, .form label > select, .filters select { font-size: 16px; }
   .top-nav, .user-email { display: none; }
+  .filters.row > input { flex: 1 1 100%; }
+  .filters.row > select { flex: 1 1 calc(50% - .5rem); min-width: 0; }
   .topbar { padding: .5rem 1rem; padding-top: calc(.5rem + env(safe-area-inset-top)); }
   main#view { padding: .8rem .85rem calc(5.5rem + env(safe-area-inset-bottom)); }
   .bottom-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; background: rgba(255,255,255,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding: .3rem .2rem calc(.3rem + env(safe-area-inset-bottom)); }
