@@ -165,29 +165,28 @@ export function bookEditModal({ book = {}, isNew = false, onSaved } = {}) {
   const m = openModal(`
     <h3>${isNew ? '서재에 추가' : '책 정보 수정'}</h3>
     <form class="form" id="bf">
-      <div class="row gap">
+      <div class="book-form-head">
         ${coverImg(b, 'cover md')}
         <div class="grow">
           <label>제목<input name="title" required value="${esc(b.title || '')}"></label>
           <label>저자<input name="author" value="${esc(b.author || '')}"></label>
-          <div class="row gap"><label class="grow">출판사<input name="publisher" value="${esc(b.publisher || '')}"></label><label>출간일<input name="pub_date" value="${esc(b.pub_date || '')}" placeholder="YYYY-MM-DD"></label></div>
         </div>
       </div>
-      <div class="row gap wrap">
-        <label class="grow">ISBN13<input name="isbn13" value="${esc(b.isbn13 || '')}"></label>
-        <label>쪽수<input name="pages" type="number" min="0" value="${esc(b.pages ?? '')}"></label>
+      <div class="fgrid">
+        <label>출판사<input name="publisher" value="${esc(b.publisher || '')}"></label>
+        <label>출간일<input name="pub_date" value="${esc(b.pub_date || '')}" placeholder="YYYY-MM-DD"></label>
+        <label>ISBN13<input name="isbn13" inputmode="numeric" value="${esc(b.isbn13 || '')}"></label>
+        <label>쪽수<input name="pages" type="number" inputmode="numeric" min="0" value="${esc(b.pages ?? '')}"></label>
         <label>상태<select name="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${k === b.status ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label>장르<select name="genre">${GENRES.map(g => `<option ${g === b.genre ? 'selected' : ''}>${g}</option>`).join('')}</select></label>
-      </div>
-      <label>표지 URL<input name="cover_url" value="${esc(b.cover_url || '')}"></label>
-      <div class="row gap wrap">
         <label>시작일<input type="date" name="start_date" value="${esc(b.start_date || '')}"></label>
         <label>완독일<input type="date" name="finish_date" value="${esc(b.finish_date || '')}"></label>
-        <label>별점 (직접 입력)<input type="number" name="rating" min="0" max="5" step="0.5" value="${esc(b.rating ?? '')}"></label>
-        <label>현재 쪽<input type="number" name="current_page" min="0" value="${esc(b.current_page ?? '')}"></label>
+        <label>별점 (직접 입력)<input type="number" inputmode="decimal" name="rating" min="0" max="5" step="0.5" placeholder="0~5" value="${esc(b.rating ?? '')}"></label>
+        <label>현재 쪽<input type="number" inputmode="numeric" name="current_page" min="0" value="${esc(b.current_page ?? '')}"></label>
       </div>
       <label>읽는 이유<input name="reason" value="${esc(b.reason || '')}" placeholder="왜 이 책을 읽나요?"></label>
       <label>태그<input name="tags" value="${esc((b.tags || []).join(', '))}" placeholder="쉼표로 구분"></label>
+      <details class="more-fields"><summary class="muted small">표지 이미지 주소 바꾸기</summary><label>표지 URL<input name="cover_url" value="${esc(b.cover_url || '')}"></label></details>
       ${b.aladin_category ? `<p class="muted small">알라딘 분류: ${esc(b.aladin_category)}</p>` : ''}
       ${!b.pages && !isNew ? '' : (!b.pages ? '<p class="muted small">쪽수 정보가 없어요. 직접 입력해 주세요.</p>' : '')}
       <div class="row end gap">
@@ -213,8 +212,24 @@ export function bookEditModal({ book = {}, isNew = false, onSaved } = {}) {
   };
   const del = f.querySelector('[data-del]');
   if (del) del.onclick = async () => {
-    if (await confirmBox(`'${b.title}'과 연결된 세션·문장·노트·정리를 모두 삭제할까요?`, '삭제')) { await db.remove('books', b.id); m.close(); location.hash = '#/library'; }
+    if (await deleteBookFlow(b)) { m.close(); location.hash = '#/library'; }
   };
+}
+
+/** 책 삭제: 연결된 기록 수를 보여주고 확인, 페이지 사진도 정리. 삭제하면 true */
+export async function deleteBookFlow(b) {
+  const n = k => S[k].filter(x => x.book_id === b.id).length;
+  const sessions = S.sessions.filter(x => x.book_id === b.id);
+  const parts = [['독서 기록', sessions.length], ['문장', n('quotes')], ['노트', n('notes')], ['가이드 대화', n('guides')]].filter(([, c]) => c).map(([t, c]) => `${t} ${c}개`);
+  const msg = `『${b.title}』을(를) 서재에서 삭제할까요?` + (parts.length ? `\n${parts.join(', ')}도 함께 지워져요.` : '') + '\n삭제하면 되돌릴 수 없어요.';
+  if (!(await confirmBox(msg, '삭제'))) return false;
+  try {
+    const photos = sessions.map(s => s.photo_path).filter(Boolean);
+    await db.remove('books', b.id);
+    for (const p of photos) db.removePhoto(p).catch(() => {});
+    toast('책을 삭제했어요');
+    return true;
+  } catch (e) { toast('삭제 실패: ' + e.message); return false; }
 }
 
 /** 세션 수정 */

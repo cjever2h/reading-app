@@ -1,10 +1,10 @@
 // 홈: 오늘 독서 시간, 읽는 중인 책, 연속 독서일, 오늘의 복습
 import * as db from './db.js';
 import { S } from './db.js';
-import { esc, ymd, fmtDur, coverImg, fmtDate } from './ui.js';
+import { esc, ymd, fmtDur, coverImg, fmtDate, toast } from './ui.js';
 import { secondsOn, pagesOn, streak, dueReviews, progress } from './calc.js';
 import { go } from './app.js';
-import { searchModal } from './forms.js';
+import { searchModal, deleteBookFlow } from './forms.js';
 import { timerState } from './v-timer.js';
 
 const STAGE_TEXT = {
@@ -60,6 +60,7 @@ export function renderHome(el) {
           <div class="row gap wrap mt">
             <button class="btn primary small" data-timer="${b.id}">타이머 시작</button>
             <button class="btn small" data-go="#/guide/new/during?book=${b.id}">읽는 중 가이드</button>
+            <button class="btn small ghost danger" data-delbook="${b.id}" aria-label="${esc(b.title)} 삭제">삭제</button>
           </div>
         </div></div>`;
     }).join('')}</div>` : `<div class="card empty"><p>읽는 중인 책이 없어요.</p><button class="btn primary" data-add>책 찾기</button></div>`}
@@ -74,6 +75,12 @@ export function renderHome(el) {
   el.querySelectorAll('[data-add]').forEach(b => b.onclick = () => searchModal({ onAdded: bk => go('#/book/' + bk.id) }));
   el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
   el.querySelectorAll('[data-timer]').forEach(b => b.onclick = () => go('#/timer/' + b.dataset.timer));
+  el.querySelectorAll('[data-delbook]').forEach(btn => btn.onclick = async () => {
+    const bk = db.book(btn.dataset.delbook);
+    if (!bk) return;
+    if (timerState()?.bookId === bk.id) { toast('이 책의 타이머가 진행 중이에요. 타이머를 먼저 종료하거나 취소해 주세요'); return; }
+    if (await deleteBookFlow(bk)) renderHome(el);
+  });
   el.querySelector('[data-daily]').onclick = () => {
     const bid = reading[0]?.id || '';
     go(`#/guide/new/daily${bid ? '?book=' + bid : ''}`);
