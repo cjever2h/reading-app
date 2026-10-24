@@ -42,7 +42,7 @@ export function closeAllModals() { [...modalStack].forEach(m => m.close()); }
 
 export function confirmBox(msg, okText = '확인') {
   return new Promise(res => {
-    const m = openModal(`<p class="confirm-msg">${nl2br(msg)}</p><div class="row end gap"><button class="btn" data-x>취소</button><button class="btn primary" data-ok>${esc(okText)}</button></div>`, { onClose: () => res(false) });
+    const m = openModal(`<p class="confirm-msg">${nl2br(msg)}</p><div class="row end gap"><button class="btn" data-x>취소</button><button class="btn ${/삭제|버리기|취소/.test(okText) ? 'danger solid' : 'primary'}" data-ok>${esc(okText)}</button></div>`, { onClose: () => res(false) });
     m.el.querySelector('[data-x]').onclick = () => m.close();
     m.el.querySelector('[data-ok]').onclick = () => { res(true); m.close(); };
   });

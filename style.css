@@ -274,7 +274,8 @@ details.card summary { cursor: pointer; }
 .cal .d.l1 { background: #d7e5dd; color: var(--ink); } .cal .d.l2 { background: #a9c8b7; color: var(--ink); } .cal .d.l3 { background: #5f9479; color: #fff; } .cal .d.l4 { background: var(--pri); color: #fff; }
 .cal .d.today { outline: 2px solid var(--acc); }
 /* 완독 달력 (표지) */
-.cover-cal { max-width: 620px; gap: 5px; }
+.cover-cal { max-width: 480px; gap: 5px; }
+.btn.danger.solid { background: var(--danger); color: #fff; border-color: var(--danger); }
 .cover-cal .d { aspect-ratio: 2 / 3; position: relative; display: block; padding: 0; border-radius: 8px; background: #f1eee5; color: var(--muted); overflow: hidden; }
 .cover-cal .d.read { background: #e4eee8; }
 .cover-cal .d .n { position: absolute; top: 3px; left: 5px; font-size: .72rem; font-weight: 600; z-index: 2; line-height: 1.2; }
