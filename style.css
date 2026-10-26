@@ -172,6 +172,14 @@ section { margin-bottom: 1.2rem; }
 .book-tile .chip { align-self: flex-start; font-size: .7rem; }
 .book-tile:hover .cover { transform: translateY(-2px); }
 .book-tile .cover { transition: transform .15s; }
+.year-chips { display: flex; gap: .4rem; overflow-x: auto; scrollbar-width: none; padding: .1rem 0 .7rem; margin-top: -.3rem; }
+.year-chips::-webkit-scrollbar { display: none; }
+.ychip { flex: 0 0 auto; appearance: none; border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 99px; padding: .32rem .8rem; font: inherit; font-size: .86rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.ychip span { font-weight: 500; opacity: .75; margin-left: .15rem; }
+.ychip.on { background: var(--pri); border-color: var(--pri); color: #fff; }
+.year-group { margin-bottom: 1.4rem; }
+.year-head { display: flex; align-items: baseline; gap: .5rem; margin: .4rem 0 .7rem; padding-bottom: .35rem; border-bottom: 1px solid var(--line); }
+.year-head h2 { font-size: 1.1rem; }
 .search-results { display: flex; flex-direction: column; gap: .4rem; max-height: 60vh; overflow: auto; }
 .result { display: flex; gap: .7rem; align-items: center; padding: .5rem; border-radius: 10px; border: 1px solid var(--line); }
 .result:hover { background: #faf8f2; }
