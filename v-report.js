@@ -152,7 +152,9 @@ export async function drawReport(canvas, d, opt) {
   if (books.length) {
     ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = F(600, 26); ctx.fillText(label, P, y); y += 22;
     const maxN = 7, show = books.slice(0, books.length > maxN ? maxN - 1 : maxN);
-    const cw = Math.min(150, (W - P * 2 - (maxN - 1) * 16) / maxN), ch = Math.round(cw * 1.45);
+    const slots = Math.min(maxN, books.length);
+    const roomH = opt.line ? 300 : 430; // 한 줄 상자 자리를 남기고 표지를 최대한 크게
+    const cw = Math.min(roomH / 1.45, (W - P * 2 - (slots - 1) * 16) / slots, 230), ch = Math.round(cw * 1.45);
     for (let i = 0; i < show.length; i++) {
       const x = P + i * (cw + 16);
       ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 10; roundRect(ctx, x, y, cw, ch, 8); ctx.fillStyle = '#2f4a3e'; ctx.fill(); ctx.restore();
@@ -167,21 +169,25 @@ export async function drawReport(canvas, d, opt) {
     }
     y += ch + 52;
   }
-  // 기억에 남은 한 줄
+  // 기억에 남은 한 줄: 내용 높이에 맞춘 상자를 남은 공간 가운데에
   const line = opt.line;
-  if (line) {
-    const boxH = H - P - 60 - y;
-    if (boxH > 120) {
-      roundRect(ctx, P, y, W - P * 2, boxH, 24); ctx.fillStyle = 'rgba(233,196,106,.12)'; ctx.fill();
-      ctx.fillStyle = GOLD; ctx.fillRect(P, y + 24, 6, boxH - 48);
-      ctx.fillStyle = GOLD; ctx.font = F(700, 24); ctx.fillText(line.kind === 'quote' ? '이달 기억에 남은 문장' : '이달 나의 한 줄', P + 40, y + 50);
-      const text = line.kind === 'quote' ? `“${line.text}”` : line.text;
-      let fs = 38, ls; const maxLines = Math.max(1, Math.floor((boxH - 120) / (fs * 1.45)));
-      ctx.font = F(600, fs); ls = wrapLines(ctx, text, W - P * 2 - 80, maxLines);
-      if (ls.length >= maxLines && fs > 30) { fs = 32; ctx.font = F(600, fs); ls = wrapLines(ctx, text, W - P * 2 - 80, Math.max(1, Math.floor((boxH - 120) / (fs * 1.45)))); }
-      ctx.fillStyle = '#fff'; ls.forEach((l, i) => ctx.fillText(l, P + 40, y + 100 + i * fs * 1.45));
-      if (line.book) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 24); ctx.textAlign = 'right'; ctx.fillText(`『${line.book}』${line.page ? ` p.${line.page}` : ''}`, W - P - 32, y + boxH - 26); ctx.textAlign = 'left'; }
-    }
+  const bottom = H - P - 50;
+  if (line && bottom - y > 140) {
+    const text = line.kind === 'quote' ? `“${line.text}”` : line.text;
+    const avail = bottom - y;
+    let fs = 40, ls;
+    for (; fs >= 28; fs -= 2) { ctx.font = F(600, fs); ls = wrapLines(ctx, text, W - P * 2 - 80, 99); if (ls.length * fs * 1.45 + 130 <= avail) break; }
+    ctx.font = F(600, fs); ls = wrapLines(ctx, text, W - P * 2 - 80, Math.max(1, Math.floor((avail - 130) / (fs * 1.45))));
+    const boxH = 84 + ls.length * fs * 1.45 + (line.book ? 46 : 18);
+    const by = y + Math.max(0, (avail - boxH) / 2);
+    roundRect(ctx, P, by, W - P * 2, boxH, 24); ctx.fillStyle = 'rgba(233,196,106,.12)'; ctx.fill();
+    ctx.fillStyle = GOLD; ctx.fillRect(P, by + 22, 6, boxH - 44);
+    ctx.font = F(700, 24); ctx.fillText(line.kind === 'quote' ? '이달 기억에 남은 문장' : '이달 나의 한 줄', P + 40, by + 50);
+    ctx.fillStyle = '#fff'; ctx.font = F(600, fs); ls.forEach((l, i) => ctx.fillText(l, P + 40, by + 84 + fs + i * fs * 1.45 - fs * 0.2));
+    if (line.book) { ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.font = F(500, 24); ctx.textAlign = 'right'; ctx.fillText(`『${line.book}』${line.page ? ` p.${line.page}` : ''}`, W - P - 32, by + boxH - 24); ctx.textAlign = 'left'; }
+  } else if (!books.length && !line) {
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.font = F(600, 34); ctx.textAlign = 'center';
+    ctx.fillText('이달의 독서 기록이 아직 없어요', W / 2, (y + bottom) / 2); ctx.textAlign = 'left';
   }
   // 바닥
   ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = F(500, 26);
