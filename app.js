@@ -11,6 +11,7 @@ import { renderGuide } from './v-guide.js';
 import { renderStats } from './v-stats.js';
 import { renderSettings } from './v-settings.js';
 import { renderReview } from './v-review.js';
+import { renderReport } from './v-report.js';
 
 const ROUTES = [
   [/^#\/home$/, renderHome, 'home'],
@@ -20,6 +21,7 @@ const ROUTES = [
   [/^#\/db$/, renderDB, 'db'],
   [/^#\/guide(?:\/([\w-]+))?(?:\/([\w-]+))?$/, renderGuide, 'guide'],
   [/^#\/stats$/, renderStats, 'stats'],
+  [/^#\/report(?:\/(\d{4}-\d{2}))?$/, renderReport, 'stats'],
   [/^#\/settings$/, renderSettings, 'stats'],
   [/^#\/review\/([\w-]+)$/, renderReview, 'home'],
 ];

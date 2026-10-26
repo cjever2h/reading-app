@@ -3,6 +3,7 @@ import { S } from './db.js';
 import * as db from './db.js';
 import { esc, ymd, addDays, fmtDur, coverImg, GENRES } from './ui.js';
 import { sessionDate, pagesOf, streak, longestStreak } from './calc.js';
+import { monthData } from './v-report.js';
 
 const view = { range: 'day', calYm: null, year: null };
 
@@ -120,6 +121,8 @@ export function renderStats(el) {
     <div class="card"><span class="label">누적 독서 시간</span><b class="big">${fmtDur(allSec)}</b><span class="muted small">${readDays}일 기록</span></div>
     <div class="card"><span class="label">누적 읽은 쪽</span><b class="big">${allPages.toLocaleString()}쪽</b><span class="muted small">문장 ${S.quotes.length} · 노트 ${S.notes.length}</span></div>
   </div>
+  ${(() => { const md = monthData(today.slice(0, 7)); return `<a class="card report-cta" href="#/report">
+    <div class="grow"><span class="label">${+today.slice(5, 7)}월 월간 리포트</span><b>${md.seconds ? fmtDur(md.seconds) : '독서 시간 기록 없음'} · 완독 ${md.finished.length}권 · 독서한 날 ${md.readDays}일</b><span class="muted small">읽은 책, 기억에 남은 한 줄, 공유 이미지</span></div><span class="chev">›</span></a>`; })()}
   <div class="card">
     <div class="sec-head"><h3>독서 시간</h3><div class="tabs small">${[['day', '일'], ['week', '주'], ['month', '월']].map(([k, v]) => `<button class="${view.range === k ? 'on' : ''}" data-r="${k}">${v}</button>`).join('')}</div></div>
     ${bars(series)}

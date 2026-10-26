@@ -1,7 +1,7 @@
 // 서비스 워커: 앱 파일 오프라인 캐시 (데이터는 Supabase에서 직접)
-const CACHE = 'reading-v4';
+const CACHE = 'reading-v5';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'db.js', 'ui.js', 'calc.js', 'forms.js', 'ocr.js', 'export.js', 'cert.js', 'guide-data.js',
-  'v-home.js', 'v-library.js', 'v-book.js', 'v-timer.js', 'v-db.js', 'v-guide.js', 'v-review.js', 'v-stats.js', 'v-settings.js',
+  'v-home.js', 'v-library.js', 'v-book.js', 'v-timer.js', 'v-db.js', 'v-guide.js', 'v-review.js', 'v-stats.js', 'v-settings.js', 'v-report.js',
   'config.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {

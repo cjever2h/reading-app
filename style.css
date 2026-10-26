@@ -311,6 +311,21 @@ details.card summary { cursor: pointer; }
 .shelf-legend span { display: inline-flex; align-items: center; gap: 3px; margin-left: .6rem; white-space: nowrap; }
 .shelf-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 @media (max-width: 480px) { .spine span { display: none; } .shelf-col { flex-basis: 24px; } .shelf-col .stack { padding: 0 2px; } .cover-cal { gap: 3px; } .cover-cal .d .n { font-size: .62rem; } }
+/* 월간 리포트 */
+.report-cta { display: flex; align-items: center; gap: .8rem; background: linear-gradient(140deg, #24453a, #16271f); color: #fff; }
+.report-cta .label { color: rgba(255,255,255,.7); display: block; }
+.report-cta b { display: block; font-size: 1.05rem; margin: .15rem 0; }
+.report-cta .muted { color: rgba(255,255,255,.6); }
+.report-cta .chev { color: #fff; }
+.month-nav { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.month-nav b { font-size: 1.1rem; min-width: 7.5rem; text-align: center; }
+.report-line { border-left: 4px solid var(--acc); background: var(--acc-soft); border-radius: 8px; padding: .7rem .9rem; display: flex; flex-direction: column; gap: .3rem; font-size: 1rem; }
+.cand { text-align: left; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: .2rem; margin: 0; border: 1px solid var(--line); }
+.cand.on { border-color: var(--pri); background: #eef4ef; }
+.report-books { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(120px, 42%), 1fr)); gap: 1rem .8rem; }
+.report-book { display: flex; flex-direction: column; gap: .2rem; }
+.report-book b { font-size: .9rem; margin-top: .3rem; line-height: 1.3; }
+.report-book .one { color: #3b4440; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .genre-bars .g { width: 7.5rem; font-size: .86rem; }
 .genre-bars .row { margin-bottom: .3rem; }
 .mini-row { padding: .35rem 0; border-bottom: 1px solid var(--line); }

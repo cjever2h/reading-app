@@ -4,7 +4,7 @@ import { S } from './db.js';
 import { esc, openModal, toast, fmtDur, pad, ymd, addDays } from './ui.js';
 import { streak, pagesOf, sessionDate, bookSeconds } from './calc.js';
 
-const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
+export const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = src; });
 
 async function fileToCanvas(file, max = 2000) {
   const url = URL.createObjectURL(file);
@@ -20,7 +20,7 @@ async function fileToCanvas(file, max = 2000) {
 const cloneCanvas = c => { const n = document.createElement('canvas'); n.width = c.width; n.height = c.height; n.getContext('2d').drawImage(c, 0, 0); return n; };
 
 /* ---------- 텍스트 줄바꿈 ---------- */
-function wrapLines(ctx, text, maxW, maxLines = 99) {
+export function wrapLines(ctx, text, maxW, maxLines = 99) {
   const lines = [];
   for (const para of String(text).split('\n')) {
     let line = '';
@@ -38,15 +38,15 @@ function wrapLines(ctx, text, maxW, maxLines = 99) {
   if (lines.length > maxLines) { const cut = lines.slice(0, maxLines); cut[maxLines - 1] = cut[maxLines - 1].replace(/.{0,2}$/, '…'); return cut; }
   return lines;
 }
-function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
-function drawCover(ctx, img, x, y, w, h) {
+export function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+export function drawCover(ctx, img, x, y, w, h) {
   // object-fit: cover
   const r = Math.max(w / img.width, h / img.height);
   const sw = w / r, sh = h / r;
   ctx.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, x, y, w, h);
 }
 
-const F = (w, s) => `${w} ${s}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
+export const F = (w, s) => `${w} ${s}px Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif`;
 
 /* ---------- 템플릿 5종 (정사각형 1080) ---------- */
 export const CERT_TEMPLATES = [
