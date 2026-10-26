@@ -360,3 +360,10 @@ details.card summary { cursor: pointer; }
 .auth-card .form { text-align: left; margin-top: 1rem; }
 .auth-logo { width: 64px; height: 64px; border-radius: 16px; }
 .auth-card h1 { margin: .5rem 0 .2rem; }
+
+/* 휴대폰: 통계·리포트 수치 카드 2열 (기본 규칙보다 뒤에 둬야 적용됨) */
+@media (max-width: 760px) {
+  .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+  .stat-cards .card { padding: .8rem .85rem; }
+  .stat-cards .big { font-size: 1.35rem; }
+}
