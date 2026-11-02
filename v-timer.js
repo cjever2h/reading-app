@@ -6,6 +6,7 @@ import { quoteModal, suggestStartPage } from './forms.js';
 import { go, updateTimerPill } from './app.js';
 import { lastPage, ensureReviews } from './calc.js';
 import { certModal } from './cert.js';
+import { photoQuoteModal } from './ocr-pick.js';
 import { MEMO_HELP } from './guide-data.js';
 
 const KEY = 'ra-timer-v1';
@@ -88,7 +89,10 @@ function running(el, st) {
       ${st.runningSince ? '<button class="btn xl" data-pause>일시정지</button>' : '<button class="btn primary xl" data-resume>계속 읽기</button>'}
       <button class="btn danger xl" data-end>종료</button>
     </div>
-    <button class="btn accent xl block quick-quote" data-quote>문장 빠르게 저장</button>
+    <div class="quick-quote row gap">
+      <button class="btn accent xl grow" data-quote>문장 빠르게 저장</button>
+      <button class="btn accent xl grow" data-photoquote>사진으로 문장 저장</button>
+    </div>
     <div class="row gap center wrap">
       <button class="btn small" data-guide>읽는 중 가이드 (동반 독서 파트너)</button>
       <button class="btn small ghost" data-cancel>기록 취소</button>
@@ -102,6 +106,7 @@ function running(el, st) {
 
   el.querySelector('[data-pause]')?.addEventListener('click', () => { st.accMs = elapsedMs(st); st.runningSince = null; setState(st); persist(st); keepAwake(false); renderTimer(el); });
   el.querySelector('[data-resume]')?.addEventListener('click', () => { st.runningSince = Date.now(); setState(st); if (localStorage.getItem('ra-wake') === '1') keepAwake(true); renderTimer(el); });
+  el.querySelector('[data-photoquote]').onclick = () => photoQuoteModal({ bookId: st.bookId, sessionId: st.sessionId, page: lastPage(st.bookId) || st.startPage, onSaved: () => renderTimer(el) });
   el.querySelector('[data-quote]').onclick = () => quoteModal({ bookId: st.bookId, sessionId: st.sessionId, page: lastPage(st.bookId) || st.startPage, onSaved: () => renderTimer(el) });
   el.querySelector('[data-guide]').onclick = () => go(`#/guide/new/during?book=${st.bookId}`);
   el.querySelector('[data-cancel]').onclick = async () => {

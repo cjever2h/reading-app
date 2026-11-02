@@ -3,7 +3,7 @@ import * as db from './db.js';
 import { S } from './db.js';
 import { esc, openModal, toast, parseTags, GENRES, STATUS, MEMO_TYPES, NOTE_KINDS, ymd, coverImg, mapGenre, confirmBox } from './ui.js';
 import { MEMO_HELP } from './guide-data.js';
-import { runOcr } from './ocr.js';
+import { photoQuoteModal } from './ocr-pick.js';
 import { lastPage } from './calc.js';
 
 /* ---------- 문장 저장 ---------- */
@@ -19,7 +19,7 @@ export function quoteModal({ bookId, sessionId = null, page = null, quote = null
         <textarea name="body" rows="4" required placeholder="마음에 남는 문장을 그대로 옮겨 적어요">${esc(q.body || '')}</textarea>
       </label>
       <div class="row gap wrap">
-        <label class="btn small file-btn">사진으로 문장 인식<input type="file" accept="image/*" capture="environment" hidden data-ocr></label>
+        <button type="button" class="btn small" data-ocr>사진에서 문장 고르기</button>
         <span class="muted small" data-ocr-msg></span>
       </div>
       <div class="row gap">
@@ -39,17 +39,11 @@ export function quoteModal({ bookId, sessionId = null, page = null, quote = null
     </form>`);
   const f = m.el.querySelector('#qf');
   f.querySelectorAll('[name=memo_type]').forEach(r => r.onchange = () => { m.el.querySelector('[data-memo-help]').textContent = MEMO_HELP[r.value]; });
-  f.querySelector('[data-ocr]').onchange = async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const msg = m.el.querySelector('[data-ocr-msg]');
-    msg.textContent = '문장 인식 중…';
-    try {
-      const text = await runOcr(file, p => { msg.textContent = p; });
-      const ta = f.querySelector('[name=body]');
-      pickOcrText(text, picked => { ta.value = (ta.value ? ta.value + '\n' : '') + picked; msg.textContent = '인식한 문장을 넣었어요. 틀린 글자를 확인하세요.'; });
-    } catch (err) { msg.textContent = '인식 실패: ' + err.message; }
-  };
+  f.querySelector('[data-ocr]').onclick = () => photoQuoteModal({ onPick: picked => {
+    const ta = f.querySelector('[name=body]');
+    ta.value = (ta.value ? ta.value + '\n' : '') + picked;
+    m.el.querySelector('[data-ocr-msg]').textContent = '사진에서 고른 문장을 넣었어요.';
+  } });
   f.onsubmit = async e => {
     e.preventDefault();
     const fd = new FormData(f);
@@ -69,11 +63,6 @@ export function quoteModal({ bookId, sessionId = null, page = null, quote = null
   return m;
 }
 
-function pickOcrText(text, cb) {
-  const m = openModal(`<h3>인식한 텍스트</h3><p class="muted small">저장할 부분만 남기고 지우거나 고친 뒤 넣기를 누르세요.</p>
-    <textarea rows="10" class="w100" data-t>${esc(text)}</textarea><div class="row end gap"><button class="btn primary" data-ok>넣기</button></div>`);
-  m.el.querySelector('[data-ok]').onclick = () => { cb(m.el.querySelector('[data-t]').value.trim()); m.close(); };
-}
 
 /* ---------- 노트 ---------- */
 export const NOTE_TEMPLATES = {

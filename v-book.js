@@ -9,6 +9,7 @@ import { MODES } from './guide-data.js';
 import { sourceLine, notebookMarkdown, reviewDraft, cardNewsCopy, threadsDraft, discussionMarkdown, aiPolish, sendToNotion } from './export.js';
 import { renderDBPanel } from './v-db.js';
 import { certModal } from './cert.js';
+import { photoQuoteModal } from './ocr-pick.js';
 
 const TABS = [['info', '개요'], ['sessions', '세션'], ['quotes', '문장'], ['notes', '노트'], ['summary', '완독 정리'], ['guide', '가이드'], ['exp', '30일 실험'], ['export', '내보내기']];
 
@@ -34,6 +35,7 @@ export function renderBook(el, id, tab = 'info') {
           <div class="row gap wrap mt">
             ${b.status !== 'done' ? `<button class="btn primary" data-act="timer">타이머 시작</button>` : ''}
             <button class="btn" data-act="quote">+ 문장</button>
+            <button class="btn" data-act="photoquote">+ 사진 문장</button>
             <button class="btn" data-act="note">+ 노트</button>
             ${b.status === 'want' ? `<button class="btn" data-act="startread">읽기 시작</button>` : ''}
             ${b.status === 'reading' ? `<button class="btn" data-act="finish">완독 처리</button>` : ''}
@@ -49,6 +51,7 @@ export function renderBook(el, id, tab = 'info') {
 
   el.querySelector('[data-act=edit]').onclick = () => bookEditModal({ book: b, onSaved: refresh });
   el.querySelector('[data-act=quote]').onclick = () => quoteModal({ bookId: id, page: lastPage(id) || null, onSaved: refresh });
+  el.querySelector('[data-act=photoquote]').onclick = () => photoQuoteModal({ bookId: id, page: lastPage(id) || null, onSaved: refresh });
   el.querySelector('[data-act=note]').onclick = () => noteModal({ bookId: id, kind: 'chapter', onSaved: refresh });
   el.querySelector('[data-act=timer]')?.addEventListener('click', () => go('#/timer/' + id));
   el.querySelector('[data-act=startread]')?.addEventListener('click', async () => { await db.save('books', { ...b, status: 'reading', start_date: b.start_date || ymd() }); refresh(); });
@@ -137,8 +140,9 @@ function tabSessions(T, b) {
 /* ---------- 문장 ---------- */
 function tabQuotes(T, b) {
   const list = db.byBook('quotes', b.id).sort((a, c) => (a.page || 0) - (c.page || 0));
-  T.innerHTML = `<div class="row end mb"><button class="btn small primary" data-new>+ 문장 저장</button></div>` + (list.length ? `<div class="list">${list.map(q => quoteCard(q)).join('')}</div>` : '<p class="card muted">저장한 문장이 없어요.</p>');
+  T.innerHTML = `<div class="row end gap mb"><button class="btn small" data-photonew>+ 사진에서 문장</button><button class="btn small primary" data-new>+ 문장 저장</button></div>` + (list.length ? `<div class="list">${list.map(q => quoteCard(q)).join('')}</div>` : '<p class="card muted">저장한 문장이 없어요.</p>');
   T.querySelector('[data-new]').onclick = () => quoteModal({ bookId: b.id, page: lastPage(b.id) || null, onSaved: refresh });
+  T.querySelector('[data-photonew]').onclick = () => photoQuoteModal({ bookId: b.id, page: lastPage(b.id) || null, onSaved: refresh });
   T.querySelectorAll('[data-q]').forEach(x => x.onclick = () => quoteModal({ quote: S.quotes.find(q => q.id === x.dataset.q), onSaved: refresh }));
 }
 export function quoteCard(q, showBook = false) {

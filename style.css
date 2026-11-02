@@ -367,3 +367,16 @@ details.card summary { cursor: pointer; }
   .stat-cards .card { padding: .8rem .85rem; }
   .stat-cards .big { font-size: 1.35rem; }
 }
+
+/* 사진에서 문장 고르기 */
+.ocr-top { display: flex; gap: .9rem; align-items: flex-start; margin-bottom: .6rem; }
+.ocr-thumb { flex: none; width: 96px; min-height: 96px; border-radius: 10px; background: #efebe0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.ocr-thumb canvas { width: 100%; height: auto; display: block; }
+.sent-list { display: flex; flex-direction: column; gap: .4rem; max-height: 42vh; overflow-y: auto; padding: 2px; }
+.sent { text-align: left; font: inherit; font-size: .95rem; line-height: 1.55; color: var(--ink); background: #fff; border: 1.5px solid var(--line); border-radius: 10px; padding: .55rem .75rem; cursor: pointer; }
+.sent.newpara { margin-top: .5rem; }
+.sent.on { border-color: var(--pri); background: #eef4ef; box-shadow: inset 4px 0 0 var(--pri); }
+.sent.saved { opacity: .6; }
+.sent .tick { display: inline-block; font-size: .7rem; font-weight: 700; color: #fff; background: var(--ok); border-radius: 6px; padding: 0 5px; margin-right: 6px; vertical-align: 1px; }
+.quick-quote { width: 100%; }
+.quick-quote .btn.xl { min-width: 0; padding: .9rem .6rem; font-size: 1rem; white-space: normal; }
