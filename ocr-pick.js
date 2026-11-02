@@ -69,13 +69,15 @@ export function photoQuoteModal({ bookId, sessionId = null, page = null, onSaved
     $('[data-save]').disabled = !body.value.trim();
   };
   body.oninput = () => { $('[data-save]').disabled = !body.value.trim(); };
+  if (form.page) form.page.oninput = () => { form.page.dataset.user = '1'; };
   form.separate.onchange = fillBody;
 
   const setSplit = text => {
     st.text = text; $('[data-raw]').value = text;
     const r = splitSentences(text);
     st.sentences = r.sentences; st.sel = new Set(); st.saved = new Set();
-    if (r.page && !onPick) { const pi = form.page; if (!pi.value || pi.dataset.auto) { pi.value = r.page; pi.dataset.auto = '1'; } $('[data-pagehint]').textContent = `(사진에서 찾음: ${r.page})`; }
+    // 사진 속 쪽수가 타이머의 현재 쪽보다 정확 → 직접 고친 게 아니면 덮어씁움
+    if (r.page && !onPick) { const pi = form.page; if (!pi.dataset.user) pi.value = r.page; $('[data-pagehint]').textContent = `(사진에서 찾음: ${r.page})`; }
     $('[data-pick]').classList.remove('hidden');
     renderList(); fillBody();
   };
