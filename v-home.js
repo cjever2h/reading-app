@@ -36,7 +36,9 @@ export function renderHome(el) {
   </section>
 
   <section>
-    <div class="sec-head"><h2>오늘의 복습</h2><span class="muted small">D+1 · D+3 · D+7</span></div>
+    <details class="review-accordion" open>
+      <summary class="sec-head review-summary"><span class="review-title"><h2>오늘의 복습</h2><span class="badge review-count">${reviews.length}</span></span><span class="review-summary-right"><span class="muted small">D+1 · D+3 · D+7</span><span class="review-chevron" aria-hidden="true">⌄</span></span></summary>
+      <div class="review-content">
     ${reviews.length ? `<div class="list">${reviews.map(r => {
       const b = db.book(r.book_id);
       const late = r.due_date < today;
@@ -45,6 +47,8 @@ export function renderHome(el) {
         <div class="grow"><div><span class="badge">${r.stage}</span> <b>${esc(b?.title || '')}</b></div><div class="muted small">${STAGE_TEXT[r.stage]}${late ? ` · ${fmtDate(r.due_date, false)} 예정분` : ''}</div></div>
         <span class="chev">›</span></a>`;
     }).join('')}</div>` : `<p class="muted card">오늘 할 복습이 없어요. 책을 완독하고 정리를 쓰면 D+1·D+3·D+7 복습이 자동으로 올라와요.</p>`}
+      </div>
+    </details>
   </section>
 
   <section>
