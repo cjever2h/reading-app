@@ -36,7 +36,7 @@ export function renderHome(el) {
   </section>
 
   <section>
-    <details class="review-accordion" open>
+    <details class="review-accordion">
       <summary class="sec-head review-summary"><span class="review-title"><h2>오늘의 복습</h2><span class="badge review-count">${reviews.length}</span></span><span class="review-summary-right"><span class="muted small">D+1 · D+3 · D+7</span><span class="review-chevron" aria-hidden="true">⌄</span></span></summary>
       <div class="review-content">
     ${reviews.length ? `<div class="list">${reviews.map(r => {
